@@ -636,6 +636,7 @@ const ROLE_LEVELS={md:0,owner:1,admin:2,accountant:3,editor:4,entry:5,viewer:6};
 const isMD=()=>U.role==='md'||U.role==='owner';
 const can=(feature)=>{
   if(U.role==='md'||U.role==='owner') return true;
+  if(U.role==='meddir'&&(feature==='revenue_view'||feature==='consultations')) return true;
   const saved=D.settings.permissions?.[U.role]||{};
   const defaults=DFLT_PERMS[U.role]||{};
   const p={...defaults,...saved};
@@ -794,7 +795,7 @@ function startApp(){
   document.getElementById('ah-badge').textContent=badgeLabel;
   document.getElementById('ah-badge').className=(isMD())?'ah-badge role-md':'ah-badge';
   const ub=document.getElementById('tab-users-btn');if(ub&&canAdmin()) ub.classList.remove('hidden');
-  const cb=document.getElementById('tab-consult-btn');if(cb&&can('revenue_view')) cb.classList.remove('hidden');
+  const cb=document.getElementById('tab-consult-btn');if(cb&&(can('revenue_view')||U.role==='meddir')) cb.classList.remove('hidden');
   applyTabVisibility();
   document.getElementById('ah-date').textContent=new Date().toLocaleDateString('en',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   setupListeners();
@@ -885,7 +886,8 @@ function populateDDs(){
 // TABS
 function switchPanel(name){
   const tabPerms={dashboard:'dashboard',revenue:'revenue',expenses:'expenses',factures:'factures',bank:'bank',reports:'reports'};
-  if(tabPerms[name]&&!can(tabPerms[name])&&!isMD()&&U.role!=='owner') return;
+  if(name==='consultations'&&U.role==='meddir') {}
+  else if(tabPerms[name]&&!can(tabPerms[name])&&!isMD()&&U.role!=='owner') return;
   if(name==='users'&&!canAdmin()) return;
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.atab').forEach(t=>t.classList.toggle('on',t.dataset.p===name));
@@ -1303,6 +1305,7 @@ function renderRoleGuide(){
     const saved=perms[r.key]||{};
     const defaults=DFLT_PERMS[r.key]||{};
     const rp={...defaults,...saved};
+    if(r.key==='meddir'){rp.revenue_view=1;rp.consultations=1;}
     const rows=features.map(f=>{
       const on=isFullAccess||(rp[f.key]===1||rp[f.key]===true);
       return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--s2)">
@@ -1366,8 +1369,9 @@ function renderPermMatrix(){
     roles.forEach(r=>{
       const rp=perms[r]||DFLT_PERMS[r]||{};
       const on=rp[f]===1||rp[f]===true;
-      html+=`<td style="text-align:center;padding:9px"><label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px">
-        <input type="checkbox" ${on?'checked':''} onchange="togglePerm('${r}','${f}',this.checked)" style="width:16px;height:16px;accent-color:var(--p);cursor:pointer">
+      const locked=r==='meddir'&&(f==='revenue_view');
+      html+=`<td style="text-align:center;padding:9px"><label style="cursor:${locked?'not-allowed':'pointer'};display:inline-flex;align-items:center;gap:4px">
+        <input type="checkbox" ${(on||locked)?'checked':''} ${locked?'disabled':''} onchange="${locked?'':"togglePerm('${r}','${f}',this.checked)"}" style="width:16px;height:16px;accent-color:var(--p);cursor:${locked?'not-allowed':'pointer'}">
       </label></td>`;
     });
     html+='</tr>';

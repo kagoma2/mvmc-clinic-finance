@@ -962,8 +962,20 @@ function clearExp(){
 }
 
 // DELETE
-async function delRev(id){if(!can('canDelete')&&!canAdmin()){alert('No permission to delete.');return;}if(!confirm('Delete?'))return;await db.collection('revenues').doc(id).delete();}
-async function delExp(id){if(!can('canDelete')&&!canAdmin()){alert('No permission to delete.');return;}if(!confirm('Delete?'))return;await db.collection('expenses').doc(id).delete();}
+async function delRev(id){
+  const entry=D.revs.find(x=>x.id===id);
+  const within24h=entry&&entry.createdAt&&(Date.now()-entry.createdAt)<86400000;
+  const accountantCanDelete=U.role==='accountant'&&within24h;
+  if(!can('canDelete')&&!canAdmin()&&!accountantCanDelete){
+    alert(U.role==='accountant'?'You can only delete entries made within the last 24 hours.':'No permission to delete.');return;
+  }if(!confirm('Delete?'))return;await db.collection('revenues').doc(id).delete();}
+async function delExp(id){
+  const entry=D.exps.find(x=>x.id===id);
+  const within24h=entry&&entry.createdAt&&(Date.now()-entry.createdAt)<86400000;
+  const accountantCanDelete=U.role==='accountant'&&within24h;
+  if(!can('canDelete')&&!canAdmin()&&!accountantCanDelete){
+    alert(U.role==='accountant'?'You can only delete entries made within the last 24 hours.':'No permission to delete.');return;
+  }if(!confirm('Delete?'))return;await db.collection('expenses').doc(id).delete();}
 async function delFac(id){if(!canAdmin()){alert('No permission.');return;}if(!confirm('Delete this facture? This cannot be undone.'))return;await db.collection('factures').doc(id).delete();}
 async function delBank(id){if(!canAdmin()){alert('No permission.');return;}if(!confirm('Delete?'))return;await db.collection('bankTx').doc(id).delete();}
 

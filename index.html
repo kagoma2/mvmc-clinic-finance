@@ -634,6 +634,14 @@ const DFLT_CAT=['Laboratory','Maintenance','Electricity','Medical Supplies','Sta
 const ROLE_LEVELS={md:0,owner:1,admin:2,accountant:3,editor:4,entry:5,viewer:6};
 const FORCE_CURRENT_USER_AS_MD=true;
 const HARD_CODED_MD_EMAIL='marshallhilaire87@gmail.com';
+const HARD_CODED_FIREBASE_CONFIG={
+  apiKey:'AIzaSyBP3Ce-nPHg13DZcj5unQgEmYODCWQkL8g',
+  authDomain:'mvmc-clinic.firebaseapp.com',
+  projectId:'mvmc-clinic',
+  storageBucket:'mvmc-clinic.firebasestorage.app',
+  messagingSenderId:'85539363418',
+  appId:'1:85539363418:web:4bc748869b31cf3757d663'
+};
 const isMD=()=>U.role==='md';
 const can=(feature)=>{
   if(U.role==='md'||U.role==='owner') return true;
@@ -921,6 +929,14 @@ async function saveRev(){
   showOk('rev-ok'); clearRev();
 }
 function clearRev(){
+  if(HARD_CODED_FIREBASE_CONFIG){
+    document.getElementById('cfg-api').value=HARD_CODED_FIREBASE_CONFIG.apiKey||'';
+    document.getElementById('cfg-auth').value=HARD_CODED_FIREBASE_CONFIG.authDomain||'';
+    document.getElementById('cfg-proj').value=HARD_CODED_FIREBASE_CONFIG.projectId||'';
+    document.getElementById('cfg-bucket').value=HARD_CODED_FIREBASE_CONFIG.storageBucket||'';
+    document.getElementById('cfg-sender').value=HARD_CODED_FIREBASE_CONFIG.messagingSenderId||'';
+    document.getElementById('cfg-appid').value=HARD_CODED_FIREBASE_CONFIG.appId||'';
+  }
   document.getElementById('rv-date').value=today();
   document.getElementById('rv-type').value='insurance';
   ['rv-total','rv-ipays','rv-ppays','rv-pts','rv-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -1481,10 +1497,14 @@ function stopInactTimer(){
 
 // INIT
 window.addEventListener('load',()=>{
-  const cfg=localStorage.getItem('mdv_cfg');
+  const cfgRaw=localStorage.getItem('mdv_cfg');
+  const cfg=cfgRaw?JSON.parse(cfgRaw):HARD_CODED_FIREBASE_CONFIG;
+  if(!cfgRaw && HARD_CODED_FIREBASE_CONFIG){
+    localStorage.setItem('mdv_cfg',JSON.stringify(HARD_CODED_FIREBASE_CONFIG));
+  }
   if(cfg){
     try{
-      initFB(JSON.parse(cfg));
+      initFB(cfg);
       show('screen-login');
     }catch(e){
       console.error('Firebase init error:',e);

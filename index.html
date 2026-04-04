@@ -366,6 +366,30 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- EDIT REVENUE MODAL -->
+<div id="modal-edit-rev" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center">
+  <div class="modal-box" style="background:white;border-radius:12px;padding:24px;width:90%;max-width:520px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;color:var(--p);margin-bottom:16px">Edit Revenue Entry</div>
+    <div class="fg c2">
+      <div class="fl"><label>Date</label><input type="date" id="er-date"></div>
+      <div class="fl"><label>Insurance / Type</label><input type="text" id="er-ins"></div>
+    </div>
+    <div class="fg c3" style="margin-top:10px">
+      <div class="fl"><label>Total Consultation (RWF)</label><input type="number" id="er-total" min="0"></div>
+      <div class="fl"><label>Insurance Pays (RWF)</label><input type="number" id="er-ins-amt" min="0"></div>
+      <div class="fl"><label>Patient Co-pay (RWF)</label><input type="number" id="er-pat" min="0"></div>
+    </div>
+    <div class="fg c2" style="margin-top:10px">
+      <div class="fl"><label>No. of Patients</label><input type="number" id="er-pts" min="1"></div>
+      <div class="fl"><label>Notes</label><input type="text" id="er-notes"></div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-s" onclick="closeEditRev()">Cancel</button>
+      <button class="btn btn-ok" onclick="saveEditRev()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
     <!-- FACTURES -->
     <div id="p-factures" class="panel">
       <div class="sec">
@@ -1193,7 +1217,10 @@ function renderRevSummary(){
         <td>${r.patients||1}</td><td style="font-weight:700">${fmt(r.total||0)}</td>
         <td style="color:var(--ok)">${fmt(r.ins||0)}</td><td style="font-weight:700">${fmt(r.pat||0)}</td>
         <td>${r.notes||'—'}</td>
-        <td>${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}</td>
+        <td style="display:flex;gap:4px">
+          ${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}
+          ${(U.role==='md'||(( U.role==='owner'||U.role==='accountant')&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-s sm" onclick="openEditRev('${r.id}')">Edit</button>`:''}
+        </td>
       </tr>`).join('');
     }
   }
@@ -1613,6 +1640,53 @@ window.addEventListener('load',()=>{
   cvFrom=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
   cvTo=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
 });
+
+let editRevId=null;
+function openEditRev(id){
+  const r=D.revs.find(x=>x.id===id);
+  if(!r) return;
+  editRevId=id;
+  document.getElementById('er-date').value=r.date||'';
+  document.getElementById('er-ins').value=r.insurance||r.type||'';
+  document.getElementById('er-total').value=r.total||0;
+  document.getElementById('er-ins-amt').value=r.ins||0;
+  document.getElementById('er-pat').value=r.pat||0;
+  document.getElementById('er-pts').value=r.patients||1;
+  document.getElementById('er-notes').value=r.notes||'';
+  const m=document.getElementById('modal-edit-rev');
+  m.style.display='flex';
+}
+function closeEditRev(){
+  document.getElementById('modal-edit-rev').style.display='none';
+  editRevId=null;
+}
+async function saveEditRev(){
+  if(!editRevId) return;
+  const r=D.revs.find(x=>x.id===editRevId);
+  const within24h=r&&r.createdAt&&(Date.now()-r.createdAt)<86400000;
+  if(U.role!=='md'&&!within24h){
+    alert('You can only edit entries made within the last 24 hours.');
+    closeEditRev();return;
+  }
+  const updates={
+    date:document.getElementById('er-date').value,
+    insurance:document.getElementById('er-ins').value,
+    total:parseFloat(document.getElementById('er-total').value)||0,
+    ins:parseFloat(document.getElementById('er-ins-amt').value)||0,
+    pat:parseFloat(document.getElementById('er-pat').value)||0,
+    patients:parseInt(document.getElementById('er-pts').value)||1,
+    notes:document.getElementById('er-notes').value.trim(),
+    editedAt:Date.now(),
+    editedBy:U.name
+  };
+  try{
+    await db.collection('revenues').doc(editRevId).update(updates);
+    closeEditRev();
+    showOk('rv-ok','✓ Entry updated successfully!');
+  }catch(e){
+    alert('Could not save: '+e.message);
+  }
+}
 </script>
 </body>
 </html>

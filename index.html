@@ -337,11 +337,11 @@ tr:last-child td{border-bottom:none}
         </div>
         <div id="rv-ins-row" class="fg c2">
           <div class="fl"><label>Insurance Provider</label><select id="rv-ins"></select></div>
-          <div class="fl"><label>Insurance Pays (RWF)</label><input type="number" id="rv-ipays" placeholder="0" min="0" oninput="calcPat()"></div>
+          <div class="fl"><label>Insurance Pays (RWF)</label><input type="number" id="rv-ipays" placeholder="0" min="0"></div>
         </div>
         <div class="fg c3">
-          <div class="fl"><label>Total Consultation (RWF)</label><input type="number" id="rv-total" placeholder="0" min="0" oninput="calcPat()"></div>
-          <div class="fl"><label>Patient Pays (RWF)</label><input type="number" id="rv-ppays" class="hi" readonly></div>
+          <div class="fl"><label>Total Consultation (RWF)</label><input type="number" id="rv-total" placeholder="0" min="0"></div>
+          <div class="fl"><label>Patient Co-pay (RWF)</label><input type="number" id="rv-ppays" class="hi" readonly></div>
           <div class="fl"><label>No. of Patients</label><input type="number" id="rv-pts" placeholder="1" min="1"></div>
         </div>
         <div class="fg c2">
@@ -353,8 +353,16 @@ tr:last-child td{border-bottom:none}
         </div>
       </div>
       <div class="sec">
-        <div class="sec-title">Today's Revenue Summary</div>
-        <div class="tw"><table><thead><tr><th>Insurance / Type</th><th>Entries</th><th>Total (RWF)</th><th>Ins. Paid (RWF)</th><th>Patient Paid (RWF)</th></tr></thead><tbody id="today-rev"></tbody></table></div>
+        <div class="sec-title">Revenue Summary</div>
+        <div class="fbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-end">
+          <div class="fl"><label>Select Date</label><input type="date" id="rv-view-date" onchange="renderRevSummary()"></div>
+          <button class="btn btn-s sm" onclick="setRevViewToday()">Today</button>
+        </div>
+        <div class="tw"><table><thead><tr><th>Insurance / Type</th><th>Entries</th><th>Total (RWF)</th><th>Ins. Paid (RWF)</th><th>Patient Co-pay (RWF)</th></tr></thead><tbody id="today-rev"></tbody></table></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">All Revenue Entries</div>
+        <div class="tw"><table><thead><tr><th>Date</th><th>Insurance / Type</th><th>Patients</th><th>Total (RWF)</th><th>Ins. Paid (RWF)</th><th>Co-pay (RWF)</th><th>Notes</th><th></th></tr></thead><tbody id="rev-list"></tbody></table></div>
       </div>
     </div>
 
@@ -818,7 +826,7 @@ function setupListeners(){
     },e=>console.warn(col,e));
     unsubs.push(u);
   };
-  listen('revenues','revs',()=>{renderDash();renderTodayRev();renderReports();});
+  listen('revenues','revs',()=>{renderDash();renderTodayRev();renderRevSummary();renderReports();});
   listen('expenses','exps',()=>{renderDash();renderTodayExp();renderReports();});
   listen('factures','facs',()=>{renderDash();renderFacs();renderReports();});
   listen('bankTx','bankTx',()=>{renderBank();renderDash();});
@@ -895,7 +903,12 @@ function switchPanel(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.atab').forEach(t=>t.classList.toggle('on',t.dataset.p===name));
   document.getElementById('p-'+name).classList.add('on');
-  if(name==='revenue') populateDDs();
+  if(name==='revenue'){
+    populateDDs();
+    const vd=document.getElementById('rv-view-date');
+    if(vd&&!vd.value) vd.value=today();
+    renderRevSummary();
+  }
   if(name==='expenses') populateDDs();
   if(name==='factures'){populateDDs();renderFacs();}
   if(name==='consultations') renderConsult();
@@ -916,9 +929,7 @@ function toggleRevType(){
   calcPat();
 }
 function calcPat(){
-  const total=parseFloat(document.getElementById('rv-total').value)||0;
-  const ins=parseFloat(document.getElementById('rv-ipays').value)||0;
-  document.getElementById('rv-ppays').value=Math.max(0,total-ins);
+  // Auto-calculation removed — patient pays is entered manually
 }
 async function saveRev(){
   if(!canWrite()){alert('You do not have permission to add entries.');return;}
@@ -971,14 +982,16 @@ async function delRev(id){
   const entry=D.revs.find(x=>x.id===id);
   const within24h=entry&&entry.createdAt&&(Date.now()-entry.createdAt)<86400000;
   const accountantCanDelete=U.role==='accountant'&&within24h;
-  if(!can('canDelete')&&!canAdmin()&&!accountantCanDelete){
+  const ownerCanDelete=U.role==='owner'&&within24h;
+  if(U.role!=='md'&&!can('canDelete')&&!accountantCanDelete&&!ownerCanDelete){
     alert(U.role==='accountant'?'You can only delete entries made within the last 24 hours.':'No permission to delete.');return;
   }if(!confirm('Delete?'))return;await db.collection('revenues').doc(id).delete();}
 async function delExp(id){
   const entry=D.exps.find(x=>x.id===id);
   const within24h=entry&&entry.createdAt&&(Date.now()-entry.createdAt)<86400000;
   const accountantCanDelete=U.role==='accountant'&&within24h;
-  if(!can('canDelete')&&!canAdmin()&&!accountantCanDelete){
+  const ownerCanDelete=U.role==='owner'&&within24h;
+  if(U.role!=='md'&&!can('canDelete')&&!accountantCanDelete&&!ownerCanDelete){
     alert(U.role==='accountant'?'You can only delete entries made within the last 24 hours.':'No permission to delete.');return;
   }if(!confirm('Delete?'))return;await db.collection('expenses').doc(id).delete();}
 async function delFac(id){if(!canAdmin()){alert('No permission.');return;}if(!confirm('Delete this facture? This cannot be undone.'))return;await db.collection('factures').doc(id).delete();}
@@ -1141,6 +1154,50 @@ function renderDashCharts(mRevs,mExps){
   chExp=ek.length?new Chart(document.getElementById('ch-exp').getContext('2d'),{type:'doughnut',data:{labels:ek,datasets:[{data:ek.map(k=>em[k]),backgroundColor:rc.slice(0,ek.length),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}}}}):null;
 }
 
+function setRevViewToday(){
+  const d=document.getElementById('rv-view-date');
+  if(d){d.value=today();}
+  renderRevSummary();
+}
+function renderRevSummary(){
+  const d=document.getElementById('rv-view-date');
+  const dt=d&&d.value?d.value:today();
+  const rows=D.revs.filter(r=>r.date===dt);
+  const im={};
+  rows.forEach(r=>{
+    const k=r.insurance||r.type||'Unknown';
+    if(!im[k])im[k]={c:0,t:0,i:0,p:0};
+    im[k].c++;im[k].t+=(r.total||0);im[k].i+=(r.ins||0);im[k].p+=(r.pat||0);
+  });
+  const ks=Object.keys(im);
+  const tb=document.getElementById('today-rev');
+  if(tb){
+    if(!ks.length){
+      tb.innerHTML='<tr><td colspan="5" class="empty">No entries for this date.</td></tr>';
+    } else {
+      let tT=0,tI=0,tP=0,tC=0;
+      tb.innerHTML=ks.map(k=>{
+        tT+=im[k].t;tI+=im[k].i;tP+=im[k].p;tC+=im[k].c;
+        return `<tr><td><span class="itag">${k}</span></td><td>${im[k].c}</td><td style="font-weight:700">${fmt(im[k].t)}</td><td style="color:var(--ok)">${fmt(im[k].i)}</td><td style="font-weight:700">${fmt(im[k].p)}</td></tr>`;
+      }).join('')+`<tr class="tot"><td>TOTAL</td><td>${tC}</td><td>${fmt(tT)}</td><td>${fmt(tI)}</td><td>${fmt(tP)}</td></tr>`;
+    }
+  }
+  const lb=document.getElementById('rev-list');
+  if(lb){
+    const allRows=D.revs.slice().sort((a,b)=>b.date.localeCompare(a.date));
+    if(!allRows.length){
+      lb.innerHTML='<tr><td colspan="8" class="empty">No revenue entries yet.</td></tr>';
+    } else {
+      lb.innerHTML=allRows.map(r=>`<tr>
+        <td>${fmtD(r.date)}</td><td><span class="itag">${r.insurance||r.type||'—'}</span></td>
+        <td>${r.patients||1}</td><td style="font-weight:700">${fmt(r.total||0)}</td>
+        <td style="color:var(--ok)">${fmt(r.ins||0)}</td><td style="font-weight:700">${fmt(r.pat||0)}</td>
+        <td>${r.notes||'—'}</td>
+        <td>${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}</td>
+      </tr>`).join('');
+    }
+  }
+}
 function renderTodayRev(){
   const td=today();
   const rows=D.revs.filter(r=>r.date===td);
@@ -1162,7 +1219,7 @@ function renderTodayExp(){
   if(!tb) return;
   if(!rows.length){tb.innerHTML=`<tr><td colspan="5" class="empty">No expenses for today.</td></tr>`;return;}
   let tot=0; rows.forEach(e=>tot+=e.amount);
-  tb.innerHTML=rows.map(e=>`<tr><td><span class="bd bg-a">${e.category}</span></td><td>${e.desc||'—'}</td><td>${e.vendor||'—'}</td><td style="font-weight:700;color:var(--err)">${fmt(e.amount)}</td><td>${canAdmin()?`<button class="btn btn-d sm" onclick="delExp('${e.id}')">Del</button>`:''}</td></tr>`).join('')+`<tr class="tot"><td colspan="3">TOTAL</td><td style="color:var(--err)">${fmt(tot)}</td><td></td></tr>`;
+  tb.innerHTML=rows.map(e=>`<tr><td><span class="bd bg-a">${e.category}</span></td><td>${e.desc||'—'}</td><td>${e.vendor||'—'}</td><td style="font-weight:700;color:var(--err)">${fmt(e.amount)}</td><td>${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&e.createdAt&&(Date.now()-e.createdAt)<86400000)||(U.role==='owner'&&e.createdAt&&(Date.now()-e.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delExp('${e.id}')">Del</button>`:''}</td></tr>`).join('')+`<tr class="tot"><td colspan="3">TOTAL</td><td style="color:var(--err)">${fmt(tot)}</td><td></td></tr>`;
 }
 
 function renderFacsSimple(){
@@ -1284,10 +1341,10 @@ function renderReports(){
   if(ftb) ftb.innerHTML=facs.length?facs.map(f=>{const out=(f.totalClaimed||0)-(f.totalReceived||0);const sc=f.status==='paid'?'s-paid':f.status==='submitted'?'s-submitted':f.status==='partial'?'s-partial':f.status==='disputed'?'s-disputed':'s-draft';return `<tr><td><span class="itag">${f.insurance}</span></td><td>${fmtD(f.periodFrom)}–${fmtD(f.periodTo)}</td><td>${fmt(f.totalClaimed)}</td><td style="color:var(--ok)">${fmt(f.totalReceived||0)}</td><td style="font-weight:700;color:${out>0?'var(--warn)':'var(--ok)'}">${fmt(out)}</td><td><span class="${sc}">${f.status}</span></td></tr>`;}).join(''):`<tr><td colspan="6" class="empty">No factures in this period.</td></tr>`;
 
   const rrb=document.getElementById('rep-rev');
-  if(rrb) rrb.innerHTML=revs.length?revs.map(r=>`<tr><td>${fmtD(r.date)}</td><td><span class="itag">${r.insurance}</span></td><td>${fmt(r.total)}</td><td>${fmt(r.ins)}</td><td>${fmt(r.pat)}</td><td>${r.notes||'—'}</td><td>${canAdmin()?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}</td></tr>`).join(''):`<tr><td colspan="7" class="empty">No revenue in this period.</td></tr>`;
+  if(rrb) rrb.innerHTML=revs.length?revs.map(r=>`<tr><td>${fmtD(r.date)}</td><td><span class="itag">${r.insurance}</span></td><td>${fmt(r.total)}</td><td>${fmt(r.ins)}</td><td>${fmt(r.pat)}</td><td>${r.notes||'—'}</td><td>${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}</td></tr>`).join(''):`<tr><td colspan="7" class="empty">No revenue in this period.</td></tr>`;
 
   const erb=document.getElementById('rep-exp');
-  if(erb) erb.innerHTML=exps.length?exps.map(e=>`<tr><td>${fmtD(e.date)}</td><td><span class="bd bg-a">${e.category}</span></td><td>${e.desc||'—'}</td><td>${e.vendor||'—'}</td><td style="color:var(--err);font-weight:700">${fmt(e.amount)}</td><td>${canAdmin()?`<button class="btn btn-d sm" onclick="delExp('${e.id}')">Del</button>`:''}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">No expenses in this period.</td></tr>`;
+  if(erb) erb.innerHTML=exps.length?exps.map(e=>`<tr><td>${fmtD(e.date)}</td><td><span class="bd bg-a">${e.category}</span></td><td>${e.desc||'—'}</td><td>${e.vendor||'—'}</td><td style="color:var(--err);font-weight:700">${fmt(e.amount)}</td><td>${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&e.createdAt&&(Date.now()-e.createdAt)<86400000)||(U.role==='owner'&&e.createdAt&&(Date.now()-e.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delExp('${e.id}')">Del</button>`:''}</td></tr>`).join(''):`<tr><td colspan="6" class="empty">No expenses in this period.</td></tr>`;
 }
 
 // USERS
@@ -1552,6 +1609,7 @@ window.addEventListener('load',()=>{
   }
   document.getElementById('rv-date').value=today();
   document.getElementById('ex-date').value=today();
+  const rvd=document.getElementById('rv-view-date');if(rvd) rvd.value=today();
   cvFrom=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
   cvTo=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
 });

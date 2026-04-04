@@ -1005,16 +1005,18 @@ function clearExp(){
 async function delRev(id){
   const entry=D.revs.find(x=>x.id===id);
   const within24h=entry&&entry.createdAt&&(Date.now()-entry.createdAt)<86400000;
-  const accountantCanDelete=U.role==='accountant'&&within24h;
-  const ownerCanDelete=U.role==='owner'&&within24h;
+  const isOwn=entry&&entry.by===U.user.uid;
+  const accountantCanDelete=U.role==='accountant'&&within24h&&isOwn;
+  const ownerCanDelete=U.role==='owner'&&within24h&&isOwn;
   if(U.role!=='md'&&!can('canDelete')&&!accountantCanDelete&&!ownerCanDelete){
     alert(U.role==='accountant'?'You can only delete entries made within the last 24 hours.':'No permission to delete.');return;
   }if(!confirm('Delete?'))return;await db.collection('revenues').doc(id).delete();}
 async function delExp(id){
   const entry=D.exps.find(x=>x.id===id);
   const within24h=entry&&entry.createdAt&&(Date.now()-entry.createdAt)<86400000;
-  const accountantCanDelete=U.role==='accountant'&&within24h;
-  const ownerCanDelete=U.role==='owner'&&within24h;
+  const isOwn=entry&&entry.by===U.user.uid;
+  const accountantCanDelete=U.role==='accountant'&&within24h&&isOwn;
+  const ownerCanDelete=U.role==='owner'&&within24h&&isOwn;
   if(U.role!=='md'&&!can('canDelete')&&!accountantCanDelete&&!ownerCanDelete){
     alert(U.role==='accountant'?'You can only delete entries made within the last 24 hours.':'No permission to delete.');return;
   }if(!confirm('Delete?'))return;await db.collection('expenses').doc(id).delete();}
@@ -1218,8 +1220,8 @@ function renderRevSummary(){
         <td style="color:var(--ok)">${fmt(r.ins||0)}</td><td style="font-weight:700">${fmt(r.pat||0)}</td>
         <td>${r.notes||'—'}</td>
         <td style="display:flex;gap:4px">
-          ${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}
-          ${(U.role==='md'||(( U.role==='owner'||U.role==='accountant')&&r.createdAt&&(Date.now()-r.createdAt)<86400000))?`<button class="btn btn-s sm" onclick="openEditRev('${r.id}')">Edit</button>`:''}
+          ${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}
+          ${(U.role==='md'||((U.role==='owner'||U.role==='accountant')&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid))?`<button class="btn btn-s sm" onclick="openEditRev('${r.id}')">Edit</button>`:''}
         </td>
       </tr>`).join('');
     }
@@ -1664,8 +1666,9 @@ async function saveEditRev(){
   if(!editRevId) return;
   const r=D.revs.find(x=>x.id===editRevId);
   const within24h=r&&r.createdAt&&(Date.now()-r.createdAt)<86400000;
-  if(U.role!=='md'&&!within24h){
-    alert('You can only edit entries made within the last 24 hours.');
+  const isOwn=r&&r.by===U.user.uid;
+  if(U.role!=='md'&&(!within24h||!isOwn)){
+    alert('You can only edit your own entries made within the last 24 hours.');
     closeEditRev();return;
   }
   const updates={

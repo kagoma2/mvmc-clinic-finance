@@ -803,6 +803,7 @@ function startApp(){
   setupListeners();
   show('screen-app');
   setMonth();
+  setTimeout(populateDDs, 1000);
   setTimeout(()=>switchPanel(can('dashboard')?'dashboard':can('revenue')?'revenue':can('revenue_view')?'consultations':'expenses'),500);
   setupPWA();
 }
@@ -894,9 +895,13 @@ function switchPanel(name){
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.atab').forEach(t=>t.classList.toggle('on',t.dataset.p===name));
   document.getElementById('p-'+name).classList.add('on');
+  if(name==='revenue') populateDDs();
+  if(name==='expenses') populateDDs();
+  if(name==='factures'){populateDDs();renderFacs();}
+  if(name==='consultations') renderConsult();
   if(name==='reports') renderReports();
-  if(name==='users') renderUsers();
-  if(name==='settings') renderSettings();
+  if(name==='users'){renderUsers();renderRoleGuide();}
+  if(name==='settings'){renderSettings();renderPermMatrix();}
 }
 document.getElementById('tab-nav').addEventListener('click',e=>{
   const t=e.target.closest('.atab');

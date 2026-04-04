@@ -651,10 +651,31 @@ const can=(feature)=>{
   return p[feature]===1||p[feature]===true;
 };
 const canManageUsers=()=>U.role==='md';
+const deepClone=o=>JSON.parse(JSON.stringify(o));
+function mergePerms(custom={}){
+  const merged=deepClone(DFLT_PERMS);
+  Object.keys(custom||{}).forEach(role=>{
+    merged[role]={...(merged[role]||{}),...(custom[role]||{})};
+  });
+  return merged;
+}
+function permsForRole(role){
+  return mergePerms(D.settings.permissions||{})[role]||{};
+}
+async function syncUsersForRole(role){
+  const rolePerms=permsForRole(role);
+  const snap=await db.collection('users').where('role','==',role).get();
+  if(snap.empty) return;
+  const batch=db.batch();
+  snap.forEach(doc=>{
+    batch.set(doc.ref,{effectivePermissions:rolePerms, permissionsRole:role, permissionsUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  });
+  await batch.commit();
+}
 
 let db,auth,app;
 let U={user:null,role:null,name:null};
-let D={revs:[],exps:[],facs:[],bankTx:[],users:[],settings:{insurances:[],categories:[],openingBalance:0,openingDate:''}};
+let D={revs:[],exps:[],facs:[],bankTx:[],users:[],settings:{insurances:[],categories:[],openingBalance:0,openingDate:'',permissions:JSON.parse(JSON.stringify(DFLT_PERMS))}};
 let unsubs=[];
 let facEditId=null,payFacId=null;
 let fFrom=null,fTo=null;
@@ -865,7 +886,16 @@ function setupListeners(){
         insurances:s.insurances||[],
         categories:s.categories||[],
         openingBalance:s.openingBalance||0,
-        openingDate:s.openingDate||''
+        openingDate:s.openingDate||'',
+        permissions:mergePerms(s.permissions||{})
+      };
+    } else {
+      D.settings={
+        insurances:[],
+        categories:[],
+        openingBalance:0,
+        openingDate:'',
+        permissions:deepClone(DFLT_PERMS)
       };
     }
     populateDDs(); renderSettings(); renderPermMatrix(); applyTabVisibility(); renderRoleGuide();
@@ -1281,7 +1311,13 @@ function renderReports(){
 // USERS
 async function assignRole(uid,role){
   if(!canManageUsers()){alert('Only Managing Director can manage users.');return;}
-  await db.collection('users').doc(uid).update({role});
+  const rolePerms=permsForRole(role);
+  await db.collection('users').doc(uid).set({
+    role,
+    effectivePermissions:rolePerms,
+    permissionsRole:role,
+    permissionsUpdatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  },{merge:true});
 }
 function renderRoleGuide(){
   const el=document.getElementById('role-guide');
@@ -1390,9 +1426,15 @@ function renderPermMatrix(){
 }
 
 async function togglePerm(role,feature,val){
+  if(!canManageUsers()){alert('Only Managing Director can change permissions.');return;}
   const update={};
   update['permissions.'+role+'.'+feature]=val?1:0;
-  await db.collection('settings').doc('main').update(update);
+  await db.collection('settings').doc('main').set(update,{merge:true});
+  D.settings.permissions=mergePerms({...(D.settings.permissions||{}),[role]:{...((D.settings.permissions||{})[role]||{}),[feature]:val?1:0}});
+  renderPermMatrix();
+  renderRoleGuide();
+  applyTabVisibility();
+  await syncUsersForRole(role);
 }
 
 function renderSettings(){

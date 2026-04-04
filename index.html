@@ -488,7 +488,7 @@ tr:last-child td{border-bottom:none}
       </div>
       <div class="sec">
         <div class="sec-title">System Users</div>
-        <p style="font-size:13px;color:var(--t2);margin-bottom:14px">Manage who can access this system. Review the <strong>Role Guide</strong> below before assigning. Roles: <strong>Owner</strong> (full access), <strong>Admin</strong> (full access, no user management), <strong>Accountant</strong> (enter data + track insurance payments + see outstanding), <strong>Medical Director</strong> (view consultation charges only), <strong>Editor</strong> (full access, no delete), <strong>Entry Only</strong> (enter revenue &amp; expenses only), <strong>Viewer</strong> (read only).</p>
+        <p style="font-size:13px;color:var(--t2);margin-bottom:14px">Manage who can access this system. Review the <strong>Role Guide</strong> below before assigning. Roles: <strong>Owner</strong> (full access), <strong>Owner</strong> (permissions controlled by Managing Director), <strong>Admin</strong> (permissions controlled by Managing Director), <strong>Accountant</strong> (permissions controlled by Managing Director), <strong>Medical Director</strong> (permissions controlled by Managing Director), <strong>Editor</strong> (permissions controlled by Managing Director), <strong>Entry Only</strong> (permissions controlled by Managing Director), <strong>Viewer</strong> (permissions controlled by Managing Director).</p>
         <div class="tw"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Change Role</th></tr></thead><tbody id="users-tbody"></tbody></table></div>
       </div>
       <div class="sec" id="pending-sec">
@@ -517,7 +517,7 @@ tr:last-child td{border-bottom:none}
         </div>
       </div>
       <div class="sec" id="perm-sec" style="display:none">
-        <div class="sec-title">Permission Manager <span style="font-size:11px;background:#b8860b;color:white;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:700">MD &amp; OWNER</span></div>
+        <div class="sec-title">Permission Manager <span style="font-size:11px;background:#b8860b;color:white;padding:2px 8px;border-radius:20px;margin-left:6px;font-weight:700">MANAGING DIRECTOR</span></div>
         <p style="font-size:13px;color:var(--t2);margin-bottom:16px">Control exactly what each role can see and do. Changes take effect immediately for all users.</p>
         <div id="perm-matrix" style="overflow-x:auto"></div>
       </div>
@@ -623,11 +623,13 @@ tr:last-child td{border-bottom:none}
 <script>
 const DFLT_INS=['RSSB','MMI','OLD MUTUAL','PRIME'];
 const DFLT_PERMS={
-  admin:      {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:1},
-  accountant: {dashboard:0,revenue:1,expenses:1,factures:1,bank:0,reports:0,outstanding:1,users:0,canDelete:0},
-  editor:     {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:0},
-  entry:      {dashboard:0,revenue:1,expenses:1,factures:0,bank:0,reports:0,outstanding:0,users:0,canDelete:0},
-  viewer:     {dashboard:1,revenue:0,expenses:0,factures:0,bank:0,reports:1,outstanding:1,users:0,canDelete:0}
+  owner:      {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:1,revenue_view:1},
+  admin:      {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:1,revenue_view:0},
+  accountant: {dashboard:0,revenue:1,expenses:1,factures:1,bank:0,reports:0,outstanding:1,users:0,canDelete:0,revenue_view:0},
+  meddir:     {dashboard:0,revenue:0,expenses:0,factures:0,bank:0,reports:0,outstanding:0,users:0,canDelete:0,revenue_view:1},
+  editor:     {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:0,revenue_view:0},
+  entry:      {dashboard:0,revenue:1,expenses:1,factures:0,bank:0,reports:0,outstanding:0,users:0,canDelete:0,revenue_view:0},
+  viewer:     {dashboard:1,revenue:0,expenses:0,factures:0,bank:0,reports:1,outstanding:1,users:0,canDelete:0,revenue_view:0}
 };
 const FEAT_LABELS={dashboard:'Dashboard & Totals',revenue:'Enter Revenue',expenses:'Enter Expenses',factures:'Manage Factures & Payments',bank:'Bank Account',reports:'Full Reports',outstanding:'Outstanding Receivables',canDelete:'Delete Entries',revenue_view:'View Consultation Charges (Read Only)'};
 const DFLT_CAT=['Laboratory','Maintenance','Electricity','Medical Supplies','Staff Salaries','Cleaning','Administration','Equipment','Internet & Communication','Other'];
@@ -644,10 +646,11 @@ const HARD_CODED_FIREBASE_CONFIG={
 };
 const isMD=()=>U.role==='md';
 const can=(feature)=>{
-  if(U.role==='md'||U.role==='owner') return true;
+  if(U.role==='md') return true;
   const p=D.settings.permissions?.[U.role]||DFLT_PERMS[U.role]||{};
   return p[feature]===1||p[feature]===true;
 };
+const canManageUsers=()=>U.role==='md';
 
 let db,auth,app;
 let U={user:null,role:null,name:null};
@@ -664,7 +667,7 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
 const allIns=()=>[...DFLT_INS,...(D.settings.insurances||[])];
 const allCat=()=>[...DFLT_CAT,...(D.settings.categories||[])];
 const canWrite=()=>U.role&&(can('revenue')||can('expenses'));
-const canAdmin=()=>U.role&&(U.role==='md'||U.role==='owner'||U.role==='admin');
+const canAdmin=()=>U.role&&(U.role==='md'||U.role==='admin');
 const isEntryOnly=()=>U.role==='entry';
 
 
@@ -816,7 +819,7 @@ function applyTabVisibility(){
   document.querySelectorAll('.atab').forEach(t=>{
     const p=t.dataset.p;
     if(!p) return;
-    if(p==='users'){t.classList.toggle('hidden',!canAdmin());return;}
+    if(p==='users'){t.classList.toggle('hidden',!canManageUsers());return;}
     if(p==='consultations'){t.classList.toggle('hidden',!can('revenue_view'));return;}
     if(tabMap[p]) t.classList.toggle('hidden',!can(tabMap[p])&&!isMD()&&U.role!=='owner');
   });
@@ -826,7 +829,7 @@ function startApp(){
   const badgeLabel=U.role==='md'?'Managing Director':U.role==='accountant'?'Accountant':U.role==='meddir'?'Medical Director':U.role.toUpperCase();
   document.getElementById('ah-badge').textContent=badgeLabel;
   document.getElementById('ah-badge').className=isMD()?'ah-badge role-md':'ah-badge';
-  const ub=document.getElementById('tab-users-btn');if(ub&&canAdmin()) ub.classList.remove('hidden');
+  const ub=document.getElementById('tab-users-btn');if(ub&&canManageUsers()) ub.classList.remove('hidden');
   const cb=document.getElementById('tab-consult-btn');if(cb&&can('revenue_view')) cb.classList.remove('hidden');
   applyTabVisibility();
   document.getElementById('ah-date').textContent=new Date().toLocaleDateString('en',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -884,7 +887,7 @@ function populateDDs(){
 function switchPanel(name){
   const tabPerms={dashboard:'dashboard',revenue:'revenue',expenses:'expenses',factures:'factures',bank:'bank',reports:'reports'};
   if(tabPerms[name]&&!can(tabPerms[name])&&!isMD()&&U.role!=='owner') return;
-  if(name==='users'&&!canAdmin()) return;
+  if(name==='users'&&!canManageUsers()) return;
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.atab').forEach(t=>t.classList.toggle('on',t.dataset.p===name));
   document.getElementById('p-'+name).classList.add('on');
@@ -1277,7 +1280,7 @@ function renderReports(){
 
 // USERS
 async function assignRole(uid,role){
-  if(!canAdmin()){alert('No permission.');return;}
+  if(!canManageUsers()){alert('Only Managing Director can manage users.');return;}
   await db.collection('users').doc(uid).update({role});
 }
 function renderRoleGuide(){
@@ -1285,10 +1288,10 @@ function renderRoleGuide(){
   if(!el) return;
   const perms=D.settings.permissions||DFLT_PERMS;
   const roles=[
-    {key:'owner',label:'Owner',badge:'role-owner',note:'Full access to everything'},
+    {key:'owner',label:'Owner',badge:'role-owner',note:'Access controlled by Managing Director permissions'},
     {key:'admin',label:'Admin',badge:'role-admin',note:'Full access, cannot manage users'},
     {key:'accountant',label:'Accountant',badge:'role-accountant',note:'Enter data + track insurance payments'},
-    {key:'meddir',label:'Medical Director',badge:'role-meddir',note:'View consultation charges only'},
+    {key:'meddir',label:'Medical Director',badge:'role-meddir',note:'Access controlled by Managing Director permissions'},
     {key:'editor',label:'Editor',badge:'role-editor',note:'Full access, cannot delete'},
     {key:'entry',label:'Entry Only',badge:'role-entry',note:'Enter revenue & expenses only'},
     {key:'viewer',label:'Viewer',badge:'role-viewer',note:'Read-only: dashboard & reports'}
@@ -1305,7 +1308,7 @@ function renderRoleGuide(){
     {key:'canDelete',label:'Delete Entries'}
   ];
   el.innerHTML=roles.map(r=>{
-    const isFullAccess=r.key==='owner';
+    const isFullAccess=r.key==='md';
     const rp=isFullAccess?{}:(perms[r.key]||DFLT_PERMS[r.key]||{});
     const rows=features.map(f=>{
       const on=isFullAccess||(rp[f.key]===1||rp[f.key]===true);
@@ -1334,29 +1337,36 @@ function renderUsers(){
     <td>${u.name||'—'}</td><td>${u.email}</td>
     <td><span class="role-${u.role}">${u.role}</span></td>
     <td><span class="bd bg-g">Active</span></td>
-    <td>${u.id!==U.user.uid&&isOwner()||u.id!==U.user.uid&&canAdmin()&&u.role!=='owner'?`<select onchange="assignRole('${u.id}',this.value)" style="border:1px solid var(--s3);border-radius:5px;padding:4px 8px;font-size:12px"><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="accountant" ${u.role==='accountant'?'selected':''}>Accountant</option><option value="meddir" ${u.role==='meddir'?'selected':''}>Medical Director</option><option value="editor" ${u.role==='editor'?'selected':''}>Editor</option><option value="entry" ${u.role==='entry'?'selected':''}>Entry Only</option><option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option>${isMD()?`<option value="owner" ${u.role==='owner'?'selected':''}>Owner</option>`:''}</select>`:'(you)'}</td>
+    <td>${u.id!==U.user.uid&&canManageUsers()?`<select onchange="assignRole('${u.id}',this.value)" style="border:1px solid var(--s3);border-radius:5px;padding:4px 8px;font-size:12px"><option value="owner" ${u.role==='owner'?'selected':''}>Owner</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option><option value="accountant" ${u.role==='accountant'?'selected':''}>Accountant</option><option value="meddir" ${u.role==='meddir'?'selected':''}>Medical Director</option><option value="editor" ${u.role==='editor'?'selected':''}>Editor</option><option value="entry" ${u.role==='entry'?'selected':''}>Entry Only</option><option value="viewer" ${u.role==='viewer'?'selected':''}>Viewer</option></select>`:'(you)'}</td>
   </tr>`).join(''):`<tr><td colspan="5" class="empty">No active users.</td></tr>`;
 
   if(ptb) ptb.innerHTML=pending.length?pending.map(u=>`<tr>
     <td>${u.name||'—'}</td><td>${u.email}</td>
     <td>${u.createdAt?.toDate?u.createdAt.toDate().toLocaleDateString():'—'}</td>
-    <td style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn btn-p sm" onclick="assignRole('${u.id}','admin')">Admin</button>
-      <button class="btn btn-s sm" onclick="assignRole('${u.id}','editor')">Editor</button>
-      <button class="btn btn-s sm" onclick="assignRole('${u.id}','viewer')">Viewer</button>
+    <td>
+      <select onchange="if(this.value)assignRole('${u.id}',this.value)" style="border:1px solid var(--s3);border-radius:5px;padding:6px 8px;font-size:12px">
+        <option value="">Assign role...</option>
+        <option value="owner">Owner</option>
+        <option value="admin">Admin</option>
+        <option value="accountant">Accountant</option>
+        <option value="meddir">Medical Director</option>
+        <option value="editor">Editor</option>
+        <option value="entry">Entry Only</option>
+        <option value="viewer">Viewer</option>
+      </select>
     </td>
   </tr>`).join(''):`<tr><td colspan="4" class="empty">No pending users.</td></tr>`;
 }
 
-function isOwner(){return U.role==='md'||U.role==='owner';}
+function isOwner(){return U.role==='owner';}
 
 // SETTINGS
 function renderPermMatrix(){
   const sec=document.getElementById('perm-sec');
-  if(!isMD()&&U.role!=='owner'){sec.style.display='none';return;}
+  if(!isMD()){sec.style.display='none';return;}
   sec.style.display='';
-  const roles=['admin','accountant','editor','entry','viewer'];
-  const roleLabels={admin:'Admin',accountant:'Accountant',editor:'Editor',entry:'Entry Only',viewer:'Viewer'};
+  const roles=['owner','admin','accountant','meddir','editor','entry','viewer'];
+  const roleLabels={owner:'Owner',admin:'Admin',accountant:'Accountant',meddir:'Medical Director',editor:'Editor',entry:'Entry Only',viewer:'Viewer'};
   const features=Object.keys(FEAT_LABELS);
   const perms=D.settings.permissions||DFLT_PERMS;
   let html=`<table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -1375,7 +1385,7 @@ function renderPermMatrix(){
     html+='</tr>';
   });
   html+='</tbody></table>';
-  html+=`<p style="font-size:11px;color:var(--t3);margin-top:10px">Note: Admin, Owner and Managing Director always have full access regardless of settings above.</p>`;
+  html+=`<p style="font-size:11px;color:var(--t3);margin-top:10px">Note: Only Managing Director has automatic full access. Every other role follows the ticks above immediately.</p>`;
   document.getElementById('perm-matrix').innerHTML=html;
 }
 

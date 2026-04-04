@@ -623,7 +623,7 @@ tr:last-child td{border-bottom:none}
 <script>
 const DFLT_INS=['RSSB','MMI','OLD MUTUAL','PRIME'];
 const DFLT_PERMS={
-  owner:      {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:1,revenue_view:1},
+  owner:      {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:0,revenue_view:1},
   admin:      {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:1},
   accountant: {dashboard:0,revenue:1,expenses:1,factures:1,bank:0,reports:0,outstanding:1,users:0,canDelete:0},
   editor:     {dashboard:1,revenue:1,expenses:1,factures:1,bank:1,reports:1,outstanding:1,users:0,canDelete:0},
@@ -635,8 +635,10 @@ const DFLT_CAT=['Laboratory','Maintenance','Electricity','Medical Supplies','Sta
 const ROLE_LEVELS={md:0,owner:1,admin:2,accountant:3,editor:4,entry:5,viewer:6};
 const isMD=()=>U.role==='md'||U.role==='owner';
 const can=(feature)=>{
-  if(U.role==='md'||U.role==='owner') return true;
-  if(U.role==='meddir'&&(feature==='revenue_view'||feature==='consultations')) return true;
+  if(U.role==='md') return true;
+  if(U.role==='owner'&&feature==='canDelete') return false;
+  if(U.role==='owner') return true;
+  if((U.role==='meddir'||U.role==='accountant')&&(feature==='revenue_view'||feature==='consultations')) return true;
   const saved=D.settings.permissions?.[U.role]||{};
   const defaults=DFLT_PERMS[U.role]||{};
   const p={...defaults,...saved};
@@ -795,7 +797,7 @@ function startApp(){
   document.getElementById('ah-badge').textContent=badgeLabel;
   document.getElementById('ah-badge').className=(isMD())?'ah-badge role-md':'ah-badge';
   const ub=document.getElementById('tab-users-btn');if(ub&&canAdmin()) ub.classList.remove('hidden');
-  const cb=document.getElementById('tab-consult-btn');if(cb&&(can('revenue_view')||U.role==='meddir')) cb.classList.remove('hidden');
+  const cb=document.getElementById('tab-consult-btn');if(cb&&(can('revenue_view')||U.role==='meddir'||U.role==='accountant')) cb.classList.remove('hidden');
   applyTabVisibility();
   document.getElementById('ah-date').textContent=new Date().toLocaleDateString('en',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   setupListeners();
@@ -1305,7 +1307,7 @@ function renderRoleGuide(){
     const saved=perms[r.key]||{};
     const defaults=DFLT_PERMS[r.key]||{};
     const rp={...defaults,...saved};
-    if(r.key==='meddir'){rp.revenue_view=1;rp.consultations=1;}
+    if(r.key==='meddir'||r.key==='accountant'){rp.revenue_view=1;rp.consultations=1;}
     const rows=features.map(f=>{
       const on=isFullAccess||(rp[f.key]===1||rp[f.key]===true);
       return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--s2)">
@@ -1340,8 +1342,12 @@ function renderUsers(){
     <td>${u.name||'—'}</td><td>${u.email}</td>
     <td>${u.createdAt?.toDate?u.createdAt.toDate().toLocaleDateString():'—'}</td>
     <td style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn btn-p sm" onclick="assignRole('${u.id}','owner')">Owner</button>
       <button class="btn btn-p sm" onclick="assignRole('${u.id}','admin')">Admin</button>
+      <button class="btn btn-s sm" onclick="assignRole('${u.id}','accountant')">Accountant</button>
+      <button class="btn btn-s sm" onclick="assignRole('${u.id}','meddir')">Medical Director</button>
       <button class="btn btn-s sm" onclick="assignRole('${u.id}','editor')">Editor</button>
+      <button class="btn btn-s sm" onclick="assignRole('${u.id}','entry')">Entry Only</button>
       <button class="btn btn-s sm" onclick="assignRole('${u.id}','viewer')">Viewer</button>
     </td>
   </tr>`).join(''):`<tr><td colspan="4" class="empty">No pending users.</td></tr>`;
@@ -1369,7 +1375,7 @@ function renderPermMatrix(){
     roles.forEach(r=>{
       const rp=perms[r]||DFLT_PERMS[r]||{};
       const on=rp[f]===1||rp[f]===true;
-      const locked=r==='meddir'&&(f==='revenue_view');
+      const locked=(r==='meddir'||r==='accountant')&&(f==='revenue_view');
       html+=`<td style="text-align:center;padding:9px"><label style="cursor:${locked?'not-allowed':'pointer'};display:inline-flex;align-items:center;gap:4px">
         <input type="checkbox" ${(on||locked)?'checked':''} ${locked?'disabled':''} onchange="${locked?'':"togglePerm('${r}','${f}',this.checked)"}" style="width:16px;height:16px;accent-color:var(--p);cursor:${locked?'not-allowed':'pointer'}">
       </label></td>`;

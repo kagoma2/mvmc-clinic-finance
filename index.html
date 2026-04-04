@@ -1368,8 +1368,11 @@ async function togglePerm(role,feature,val){
   try{
     if(!D.settings.permissions) D.settings.permissions={};
     Object.keys(DFLT_PERMS).forEach(r=>{
-      if(!D.settings.permissions[r]) D.settings.permissions[r]={...DFLT_PERMS[r]};
+      if(!D.settings.permissions[r]||typeof D.settings.permissions[r]!=='object'){
+        D.settings.permissions[r]=JSON.parse(JSON.stringify(DFLT_PERMS[r]||{}));
+      }
     });
+    if(!D.settings.permissions[role]) D.settings.permissions[role]=JSON.parse(JSON.stringify(DFLT_PERMS[role]||{}));
     D.settings.permissions[role][feature]=val?1:0;
     const allPerms=JSON.parse(JSON.stringify(D.settings.permissions));
     await db.collection('settings').doc('main').set({permissions:allPerms},{merge:true});

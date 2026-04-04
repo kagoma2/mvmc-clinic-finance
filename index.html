@@ -633,9 +633,9 @@ const DFLT_PERMS={
 const FEAT_LABELS={dashboard:'Dashboard & Totals',revenue:'Enter Revenue',expenses:'Enter Expenses',factures:'Manage Factures & Payments',bank:'Bank Account',reports:'Full Reports',outstanding:'Outstanding Receivables',canDelete:'Delete Entries',revenue_view:'View Consultations (Medical Director)'};
 const DFLT_CAT=['Laboratory','Maintenance','Electricity','Medical Supplies','Staff Salaries','Cleaning','Administration','Equipment','Internet & Communication','Other'];
 const ROLE_LEVELS={md:0,owner:1,admin:2,accountant:3,editor:4,entry:5,viewer:6};
-const isMD=()=>U.role==='md';
+const isMD=()=>U.role==='md'||U.role==='owner';
 const can=(feature)=>{
-  if(U.role==='md') return true;
+  if(U.role==='md'||U.role==='owner') return true;
   const saved=D.settings.permissions?.[U.role]||{};
   const defaults=DFLT_PERMS[U.role]||{};
   const p={...defaults,...saved};
@@ -657,7 +657,7 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
 const allIns=()=>[...DFLT_INS,...(D.settings.insurances||[])];
 const allCat=()=>[...DFLT_CAT,...(D.settings.categories||[])];
 const canWrite=()=>U.role&&(can('revenue')||can('expenses'));
-const canAdmin=()=>U.role&&(U.role==='md'||can('users')||U.role==='owner'||U.role==='admin');
+const canAdmin=()=>U.role&&(isMD()||can('users')||U.role==='admin');
 const isEntryOnly=()=>U.role==='entry';
 
 
@@ -790,9 +790,9 @@ function applyTabVisibility(){
 }
 function startApp(){
   document.getElementById('ah-uname').textContent=U.name;
-  const badgeLabel=U.role==='md'?'Managing Director':U.role==='accountant'?'Accountant':U.role==='meddir'?'Medical Director':U.role.toUpperCase();
+  const badgeLabel=U.role==='md'?'Managing Director':U.role==='owner'?'Managing Director':U.role==='accountant'?'Accountant':U.role==='meddir'?'Medical Director':U.role.toUpperCase();
   document.getElementById('ah-badge').textContent=badgeLabel;
-  document.getElementById('ah-badge').className=isMD()?'ah-badge role-md':'ah-badge';
+  document.getElementById('ah-badge').className=(isMD())?'ah-badge role-md':'ah-badge';
   const ub=document.getElementById('tab-users-btn');if(ub&&canAdmin()) ub.classList.remove('hidden');
   const cb=document.getElementById('tab-consult-btn');if(cb&&can('revenue_view')) cb.classList.remove('hidden');
   applyTabVisibility();
@@ -1325,12 +1325,14 @@ function renderUsers(){
   </tr>`).join(''):`<tr><td colspan="4" class="empty">No pending users.</td></tr>`;
 }
 
-function isOwner(){return U.role==='md';}
+function isOwner(){return isMD();}
 
 // SETTINGS
 function renderPermMatrix(){
   const sec=document.getElementById('perm-sec');
-  if(!isMD()&&U.role!=='owner'){sec.style.display='none';return;}
+  if(!sec) return;
+  if(!isMD()){sec.style.display='none';return;}
+  sec.style.display='';
   sec.style.display='';
   const roles=['owner','admin','accountant','meddir','editor','entry','viewer'];
   const roleLabels={owner:'Owner',admin:'Admin',accountant:'Accountant',meddir:'Medical Director',editor:'Editor',entry:'Entry Only',viewer:'Viewer'};
@@ -1373,6 +1375,7 @@ async function togglePerm(role,feature,val){
 }
 
 function renderSettings(){
+  renderPermMatrix();
   const it=document.getElementById('ins-tags');
   if(it) it.innerHTML=[...DFLT_INS.map(i=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--s1);border:1.5px solid var(--p);border-radius:20px;font-size:12px;font-weight:700;color:var(--p)">${i}<span style="font-size:10px;color:var(--t3)"> default</span></span>`),
     ...(D.settings.insurances||[]).map(i=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:var(--s1);border:1.5px solid var(--s3);border-radius:20px;font-size:12px">${i}<span style="cursor:pointer;color:var(--err);font-size:16px;font-weight:700;line-height:1" onclick="rmIns('${i}')">×</span></span>`)

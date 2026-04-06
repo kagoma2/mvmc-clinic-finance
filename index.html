@@ -408,6 +408,51 @@ tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- EDIT BANK MODAL -->
+<div id="modal-edit-bank" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center">
+  <div class="modal-box" style="background:white;border-radius:12px;padding:24px;width:90%;max-width:520px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;color:var(--p);margin-bottom:16px">Edit Bank Transaction</div>
+    <div class="fg c2">
+      <div class="fl"><label>Date</label><input type="date" id="eb-date"></div>
+      <div class="fl"><label>Type</label><select id="eb-type"><option value="credit">Credit (Money In)</option><option value="debit">Debit (Money Out)</option></select></div>
+    </div>
+    <div class="fg c2" style="margin-top:10px">
+      <div class="fl"><label>Amount (RWF)</label><input type="number" id="eb-amount" min="0"></div>
+      <div class="fl"><label>Category</label><input type="text" id="eb-category"></div>
+    </div>
+    <div class="fg" style="margin-top:10px">
+      <div class="fl"><label>Description / Reason</label><textarea id="eb-desc" rows="2"></textarea></div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-s" onclick="closeEditBank()">Cancel</button>
+      <button class="btn btn-ok" onclick="saveEditBank()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT EXPENSE MODAL -->
+<div id="modal-edit-exp" class="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:999;align-items:center;justify-content:center">
+  <div class="modal-box" style="background:white;border-radius:12px;padding:24px;width:90%;max-width:520px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:700;color:var(--p);margin-bottom:16px">Edit Expense Entry</div>
+    <div class="fg c2">
+      <div class="fl"><label>Date</label><input type="date" id="ee-date"></div>
+      <div class="fl"><label>Category</label><input type="text" id="ee-cat"></div>
+    </div>
+    <div class="fg c2" style="margin-top:10px">
+      <div class="fl"><label>Amount (RWF)</label><input type="number" id="ee-amt" min="0"></div>
+      <div class="fl"><label>Vendor / Supplier</label><input type="text" id="ee-vendor"></div>
+    </div>
+    <div class="fg c2" style="margin-top:10px">
+      <div class="fl"><label>Reference</label><input type="text" id="ee-ref"></div>
+      <div class="fl"><label>Notes</label><input type="text" id="ee-notes"></div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-s" onclick="closeEditExp()">Cancel</button>
+      <button class="btn btn-ok" onclick="saveEditExp()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
     <!-- BANK -->
     <div id="p-bank" class="panel">
       <div class="kpi-grid" id="bank-kpis"></div>
@@ -418,9 +463,14 @@ tr:last-child td{border-bottom:none}
           <button class="btn btn-p" onclick="openBankModal()" id="btn-bank-tx">+ Record Transaction</button>
           <button class="btn btn-s" onclick="openSettingBalance()">Set Opening Balance</button>
         </div>
+        <div class="fbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-end">
+          <div class="fl"><label>Filter by Date</label><input type="date" id="bk-view-date" onchange="renderBankFiltered()"></div>
+          <button class="btn btn-s sm" onclick="setBankViewToday()">Today</button>
+          <button class="btn btn-s sm" onclick="document.getElementById('bk-view-date').value='';renderBankFiltered()">Show All</button>
+        </div>
         <div class="tw">
           <table>
-            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Credit (+)</th><th>Debit (−)</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Credit (+)</th><th>Debit (−)</th><th>By</th><th>Actions</th></tr></thead>
             <tbody id="bank-tbody"></tbody>
           </table>
         </div>
@@ -447,8 +497,16 @@ tr:last-child td{border-bottom:none}
         </div>
       </div>
       <div class="sec">
-        <div class="sec-title">Today's Expenses</div>
-        <div class="tw"><table><thead><tr><th>Category</th><th>Description</th><th>Vendor</th><th>Amount (RWF)</th><th></th></tr></thead><tbody id="today-exp"></tbody></table></div>
+        <div class="sec-title">Expense Summary</div>
+        <div class="fbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-end">
+          <div class="fl"><label>Select Date</label><input type="date" id="ex-view-date" onchange="renderExpSummary()"></div>
+          <button class="btn btn-s sm" onclick="setExpViewToday()">Today</button>
+        </div>
+        <div class="tw"><table><thead><tr><th>Category</th><th>Entries</th><th>Total (RWF)</th></tr></thead><tbody id="today-exp"></tbody></table></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">All Expense Entries</div>
+        <div class="tw"><table><thead><tr><th>Date</th><th>Category</th><th>Amount (RWF)</th><th>Vendor</th><th>Reference</th><th>Notes</th><th></th></tr></thead><tbody id="exp-list"></tbody></table></div>
       </div>
     </div>
 
@@ -621,10 +679,14 @@ tr:last-child td{border-bottom:none}
     </div>
     <div class="fg c2">
       <div class="fl"><label>Amount (RWF)</label><input type="number" id="bk-amount" placeholder="0" min="0"></div>
-      <div class="fl"><label>Category</label><select id="bk-cat"><option value="patient_cash">Patient Cash</option><option value="insurance_payment">Insurance Payment</option><option value="expense">Expense Payment</option><option value="other">Other</option></select></div>
+      <div class="fl"><label>Category</label><select id="bk-cat" onchange="toggleBkExpCat()"><option value="patient_cash">Patient Cash (In)</option><option value="insurance_payment">Insurance Payment (In)</option><option value="expense">Expense Payment (Out)</option><option value="salary">Staff Salary (Out)</option><option value="withdrawal">Withdrawal (Out)</option><option value="other">Other</option></select></div>
+    </div>
+    <div class="fg c2" id="bk-exp-cat-row" style="display:none">
+      <div class="fl"><label>Expense Category</label><select id="bk-exp-cat"><option>Laboratory</option><option>Maintenance</option><option>Electricity</option><option>Medical Supplies</option><option>Staff Salaries</option><option>Cleaning</option><option>Administration</option><option>Equipment</option><option>Internet &amp; Communication</option><option>Other</option></select></div>
+      <div class="fl"><label>Reason / Description</label><input type="text" id="bk-exp-reason" placeholder="Why is money going out?"></div>
     </div>
     <div class="fg">
-      <div class="fl"><label>Description</label><textarea id="bk-desc" placeholder="Brief description..."></textarea></div>
+      <div class="fl"><label>Description / Notes</label><textarea id="bk-desc" placeholder="Brief description..."></textarea></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-s" onclick="closeBankModal()">Cancel</button>
@@ -850,10 +912,10 @@ function setupListeners(){
     },e=>console.warn(col,e));
     unsubs.push(u);
   };
-  listen('revenues','revs',()=>{renderDash();renderTodayRev();renderRevSummary();renderReports();});
-  listen('expenses','exps',()=>{renderDash();renderTodayExp();renderReports();});
+  listen('revenues','revs',()=>{renderDash();renderRevSummary();renderReports();});
+  listen('expenses','exps',()=>{renderDash();renderExpSummary();renderReports();});
   listen('factures','facs',()=>{renderDash();renderFacs();renderReports();});
-  listen('bankTx','bankTx',()=>{renderBank();renderDash();});
+  listen('bankTx','bankTx',()=>{renderBankFiltered();renderDash();});
   if(canAdmin()){
     const u=db.collection('users').onSnapshot(snap=>{D.users=snap.docs.map(d=>({id:d.id,...d.data()}));renderUsers();},e=>console.warn('users',e));
     unsubs.push(u);
@@ -936,6 +998,7 @@ function switchPanel(name){
   if(name==='expenses') populateDDs();
   if(name==='factures'){populateDDs();renderFacs();}
   if(name==='consultations') renderConsult();
+  if(name==='bank'){renderBank();renderBankFiltered();}
   if(name==='reports') renderReports();
   if(name==='users'){renderUsers();renderRoleGuide();}
   if(name==='settings'){renderSettings();renderPermMatrix();}
@@ -1107,7 +1170,22 @@ async function saveBankTx(){
   if(!canWrite()){alert('No permission.');return;}
   const amount=parseFloat(document.getElementById('bk-amount').value)||0;
   if(!amount){alert('Enter amount.');return;}
-  await db.collection('bankTx').add({date:document.getElementById('bk-date').value,type:document.getElementById('bk-type').value,amount,description:document.getElementById('bk-desc').value.trim(),category:document.getElementById('bk-cat').value,uid:U.user.uid,ts:firebase.firestore.FieldValue.serverTimestamp()});
+  const bkCat=document.getElementById('bk-cat').value;
+  const expCat=document.getElementById('bk-exp-cat')?document.getElementById('bk-exp-cat').value:'';
+  const expReason=document.getElementById('bk-exp-reason')?document.getElementById('bk-exp-reason').value.trim():'';
+  await db.collection('bankTx').add({
+    date:document.getElementById('bk-date').value,
+    type:document.getElementById('bk-type').value,
+    amount,
+    description:document.getElementById('bk-desc').value.trim()||(expReason||bkCat),
+    category:bkCat,
+    expenseCategory:expCat,
+    expenseReason:expReason,
+    by:U.user.uid,
+    byName:U.name,
+    createdAt:Date.now(),
+    ts:firebase.firestore.FieldValue.serverTimestamp()
+  })
   showOk('bank-ok','✓ Transaction saved!'); closeBankModal();
 }
 function openSettingBalance(){document.getElementById('ob-amount').value=D.settings.openingBalance||'';document.getElementById('ob-date').value=D.settings.openingDate||today();document.getElementById('modal-balance').classList.add('on');}
@@ -1639,6 +1717,7 @@ window.addEventListener('load',()=>{
   document.getElementById('rv-date').value=today();
   document.getElementById('ex-date').value=today();
   const rvd=document.getElementById('rv-view-date');if(rvd) rvd.value=today();
+  const evd=document.getElementById('ex-view-date');if(evd) evd.value=today();
   cvFrom=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
   cvTo=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
 });
@@ -1690,6 +1769,188 @@ async function saveEditRev(){
     alert('Could not save: '+e.message);
   }
 }
+
+// ============ EXPENSES ============
+function setExpViewToday(){
+  const d=document.getElementById('ex-view-date');
+  if(d) d.value=today();
+  renderExpSummary();
+}
+function renderExpSummary(){
+  const d=document.getElementById('ex-view-date');
+  const dt=d&&d.value?d.value:today();
+  const rows=D.exps.filter(e=>e.date===dt);
+  const im={};
+  rows.forEach(e=>{
+    const k=e.category||'Other';
+    if(!im[k])im[k]={c:0,t:0};
+    im[k].c++;im[k].t+=(e.amount||0);
+  });
+  const ks=Object.keys(im);
+  const tb=document.getElementById('today-exp');
+  if(tb){
+    if(!ks.length){
+      tb.innerHTML='<tr><td colspan="3" class="empty">No expense entries for this date.</td></tr>';
+    } else {
+      let tT=0,tC=0;
+      tb.innerHTML=ks.map(k=>{
+        tT+=im[k].t;tC+=im[k].c;
+        return `<tr><td><span class="itag">${k}</span></td><td>${im[k].c}</td><td style="font-weight:700;color:var(--err)">${fmt(im[k].t)}</td></tr>`;
+      }).join('')+`<tr class="tot"><td>TOTAL</td><td>${tC}</td><td style="color:var(--err)">${fmt(tT)}</td></tr>`;
+    }
+  }
+  const lb=document.getElementById('exp-list');
+  if(lb){
+    const allRows=D.exps.slice().sort((a,b)=>b.date.localeCompare(a.date));
+    if(!allRows.length){
+      lb.innerHTML='<tr><td colspan="7" class="empty">No expense entries yet.</td></tr>';
+    } else {
+      lb.innerHTML=allRows.map(e=>`<tr>
+        <td>${fmtD(e.date)}</td>
+        <td><span class="itag">${e.category||'—'}</span></td>
+        <td style="font-weight:700;color:var(--err)">${fmt(e.amount||0)}</td>
+        <td>${e.vendor||'—'}</td>
+        <td>${e.ref||'—'}</td>
+        <td>${e.notes||'—'}</td>
+        <td style="display:flex;gap:4px">
+          ${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&e.createdAt&&(Date.now()-e.createdAt)<86400000&&e.by===U.user.uid)||(U.role==='owner'&&e.createdAt&&(Date.now()-e.createdAt)<86400000&&e.by===U.user.uid))?`<button class="btn btn-d sm" onclick="delExp('${e.id}')">Del</button>`:''}
+          ${(U.role==='md'||((U.role==='owner'||U.role==='accountant')&&e.createdAt&&(Date.now()-e.createdAt)<86400000&&e.by===U.user.uid))?`<button class="btn btn-s sm" onclick="openEditExp('${e.id}')">Edit</button>`:''}
+        </td>
+      </tr>`).join('');
+    }
+  }
+}
+function renderTodayExp(){renderExpSummary();}
+
+let editExpId=null;
+function openEditExp(id){
+  const e=D.exps.find(x=>x.id===id);
+  if(!e) return;
+  editExpId=id;
+  document.getElementById('ee-date').value=e.date||'';
+  document.getElementById('ee-cat').value=e.category||'';
+  document.getElementById('ee-amt').value=e.amount||0;
+  document.getElementById('ee-vendor').value=e.vendor||'';
+  document.getElementById('ee-ref').value=e.ref||'';
+  document.getElementById('ee-notes').value=e.notes||'';
+  document.getElementById('modal-edit-exp').style.display='flex';
+}
+function closeEditExp(){
+  document.getElementById('modal-edit-exp').style.display='none';
+  editExpId=null;
+}
+async function saveEditExp(){
+  if(!editExpId) return;
+  const e=D.exps.find(x=>x.id===editExpId);
+  const within24h=e&&e.createdAt&&(Date.now()-e.createdAt)<86400000;
+  const isOwn=e&&e.by===U.user.uid;
+  if(U.role!=='md'&&(!within24h||!isOwn)){
+    alert('You can only edit your own entries within 24 hours.');
+    closeEditExp();return;
+  }
+  const updates={
+    date:document.getElementById('ee-date').value,
+    category:document.getElementById('ee-cat').value,
+    amount:parseFloat(document.getElementById('ee-amt').value)||0,
+    vendor:document.getElementById('ee-vendor').value.trim(),
+    ref:document.getElementById('ee-ref').value.trim(),
+    notes:document.getElementById('ee-notes').value.trim(),
+    editedAt:Date.now(),editedBy:U.name
+  };
+  try{
+    await db.collection('expenses').doc(editExpId).update(updates);
+    closeEditExp();
+    showOk('ex-ok','✓ Expense updated!');
+  }catch(err){alert('Could not save: '+err.message);}
+}
+
+// ============ BANK EDIT ============
+let editBankId=null;
+function openEditBank(id){
+  const t=D.bankTx.find(x=>x.id===id);
+  if(!t) return;
+  editBankId=id;
+  document.getElementById('eb-date').value=t.date||'';
+  document.getElementById('eb-type').value=t.type||'credit';
+  document.getElementById('eb-amount').value=t.amount||0;
+  document.getElementById('eb-category').value=t.category||'';
+  document.getElementById('eb-desc').value=t.desc||t.description||'';
+  document.getElementById('modal-edit-bank').style.display='flex';
+}
+function closeEditBank(){
+  document.getElementById('modal-edit-bank').style.display='none';
+  editBankId=null;
+}
+async function saveEditBank(){
+  if(!editBankId) return;
+  const t=D.bankTx.find(x=>x.id===editBankId);
+  const within24h=t&&t.createdAt&&(Date.now()-t.createdAt)<86400000;
+  const isOwn=t&&t.by===U.user.uid;
+  if(U.role!=='md'&&(!within24h||!isOwn)){
+    alert('You can only edit your own transactions within 24 hours.');
+    closeEditBank();return;
+  }
+  const updates={
+    date:document.getElementById('eb-date').value,
+    type:document.getElementById('eb-type').value,
+    amount:parseFloat(document.getElementById('eb-amount').value)||0,
+    category:document.getElementById('eb-category').value,
+    description:document.getElementById('eb-desc').value.trim(),
+    editedAt:Date.now(),editedBy:U.name
+  };
+  try{
+    await db.collection('bankTx').doc(editBankId).update(updates);
+    closeEditBank();
+    showOk('bank-ok','✓ Transaction updated!');
+  }catch(err){alert('Could not save: '+err.message);}
+}
+
+// ============ BANK ============
+function toggleBkExpCat(){
+  const cat=document.getElementById('bk-cat').value;
+  const row=document.getElementById('bk-exp-cat-row');
+  if(row) row.style.display=(cat==='expense'||cat==='salary'||cat==='withdrawal')?'':'none';
+}
+function setBankViewToday(){
+  const d=document.getElementById('bk-view-date');
+  if(d) d.value=today();
+  renderBankFiltered();
+}
+function renderBankFiltered(){
+  const d=document.getElementById('bk-view-date');
+  const dt=d&&d.value?d.value:null;
+  const rows=dt?D.bankTx.filter(t=>t.date===dt):D.bankTx;
+  const sorted=rows.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  const tb=document.getElementById('bank-tbody');
+  if(!tb) return;
+  if(!sorted.length){
+    tb.innerHTML=`<tr><td colspan="7" class="empty">${dt?'No transactions for this date.':'No bank transactions yet.'}</td></tr>`;
+    return;
+  }
+  tb.innerHTML=sorted.map(t=>{
+    const canAct=U.role==='md'||((U.role==='owner'||U.role==='accountant')&&t.createdAt&&(Date.now()-t.createdAt)<86400000&&t.by===U.user.uid);
+    return `<tr>
+    <td>${fmtD(t.date)}</td>
+    <td>${t.desc||t.description||'—'}</td>
+    <td>${t.category||'—'}</td>
+    <td style="color:var(--ok);font-weight:700">${t.type==='credit'?fmt(t.amount||0):'—'}</td>
+    <td style="color:var(--err);font-weight:700">${t.type==='debit'?fmt(t.amount||0):'—'}</td>
+    <td style="font-size:11px;color:var(--t2)">${t.byName||'—'}</td>
+    <td style="display:flex;gap:4px">
+      ${canAct?`<button class="btn btn-d sm" onclick="delBankTx('${t.id}')">Del</button>`:''}
+      ${canAct?`<button class="btn btn-s sm" onclick="openEditBank('${t.id}')">Edit</button>`:''}
+    </td>
+  </tr>`;}).join('');
+}
+async function delBankTx(id){
+  const t=D.bankTx.find(x=>x.id===id);
+  const within24h=t&&t.createdAt&&(Date.now()-t.createdAt)<86400000;
+  const isOwn=t&&t.by===U.user.uid;
+  if(U.role!=='md'&&(!within24h||!isOwn)){alert('You can only delete your own transactions within 24 hours.');return;}
+  if(!confirm('Delete this bank transaction?')) return;
+  await db.collection('bankTx').doc(id).delete();
+}
+
 </script>
 </body>
 </html>

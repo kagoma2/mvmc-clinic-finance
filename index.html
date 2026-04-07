@@ -341,7 +341,7 @@ tr:last-child td{border-bottom:none}
         </div>
         <div class="fg c3">
           <div class="fl"><label>Total Consultation (RWF)</label><input type="number" id="rv-total" placeholder="0" min="0"></div>
-          <div class="fl"><label>Patient Co-pay (RWF)</label><input type="number" id="rv-ppays" class="hi" readonly></div>
+          <div class="fl"><label>Patient Co-pay (RWF)</label><input type="number" id="rv-ppays" placeholder="0" min="0"></div>
           <div class="fl"><label>No. of Patients</label><input type="number" id="rv-pts" placeholder="1" min="1"></div>
         </div>
         <div class="fg c2">
@@ -1033,7 +1033,7 @@ async function saveRev(){
     total,ins,pat,
     patients:parseInt(document.getElementById('rv-pts').value)||1,
     notes:document.getElementById('rv-notes').value.trim(),
-    uid:U.user.uid,ts:firebase.firestore.FieldValue.serverTimestamp()
+    by:U.user.uid,byName:U.name,createdAt:Date.now(),ts:firebase.firestore.FieldValue.serverTimestamp()
   });
   showOk('rev-ok'); clearRev();
 }
@@ -1054,8 +1054,10 @@ async function saveExp(){
   await db.collection('expenses').add({
     date,category:document.getElementById('ex-cat').value,amount,
     vendor:document.getElementById('ex-vendor').value.trim(),
-    desc:document.getElementById('ex-desc').value.trim(),
-    uid:U.user.uid,ts:firebase.firestore.FieldValue.serverTimestamp()
+    ref:document.getElementById('ex-ref')?document.getElementById('ex-ref').value.trim():'',
+    notes:document.getElementById('ex-notes')?document.getElementById('ex-notes').value.trim():'',
+    desc:document.getElementById('ex-desc')?document.getElementById('ex-desc').value.trim():'',
+    by:U.user.uid,byName:U.name,createdAt:Date.now(),ts:firebase.firestore.FieldValue.serverTimestamp()
   });
   showOk('exp-ok'); clearExp();
 }

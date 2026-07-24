@@ -681,13 +681,16 @@ tr:last-child td{border-bottom:none}
       <div class="fl"><label>Notes</label><textarea id="py-notes" placeholder="Optional"></textarea></div>
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--s2)">
-      <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40">
+      <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40;margin-bottom:10px">
         <strong>Record Payment Only</strong> — insurance may still pay the rest later.<br>
-        <strong>Settle &amp; Close</strong> — insurance will pay no more. Remaining amount auto-recorded as deduction. Invoice removed from outstanding.
+        <strong>Settle &amp; Close</strong> — insurance will pay no more. Deduction auto-calculated but you can edit it below. Invoice removed from outstanding.
       </div>
-      <div class="fg c2" style="margin-top:10px">
-        <div class="fl"><label>Reason for Deduction (if any)</label><input type="text" id="py-reason" placeholder="e.g. Wrong claim form, coding error..."></div>
-        <input type="hidden" id="py-deduct" value="0">
+      <div class="fg c2">
+        <div class="fl">
+          <label>Amount Deducted / Refused (RWF) <span style="font-size:10px;color:#00838f">— auto-filled, you can edit</span></label>
+          <input type="number" id="py-deduct" placeholder="0" min="0" value="0">
+        </div>
+        <div class="fl"><label>Reason for Deduction</label><input type="text" id="py-reason" placeholder="e.g. Wrong claim form, coding error..."></div>
       </div>
     </div>
     <div class="modal-actions">
@@ -1176,8 +1179,10 @@ function calcDeducted(){
   const alreadyReceived=f.totalReceived||0;
   const totalReceived=alreadyReceived+received;
   const deducted=Math.max(0,(f.totalClaimed||0)-totalReceived);
-  document.getElementById('py-deduct').value=deducted>0?deducted:0;
+  const df=document.getElementById('py-deduct');
+  if(df) df.value=deducted>0?deducted:0;
 }
+
 function openPayModal(facId){
   payFacId=facId;
   const f=D.facs.find(x=>x.id===facId);
@@ -1200,10 +1205,10 @@ async function savePay(settle){
   const f=D.facs.find(x=>x.id===payFacId);
   const reason=document.getElementById('py-reason').value.trim();
   const newRec=(f.totalReceived||0)+amount;
-  // Auto-calculate deducted: if settling, remaining unpaid = deducted
-  const autoDeduct=settle?Math.max(0,(f.totalClaimed||0)-newRec):0;
-  const newDeduct=autoDeduct;
-  const payment={date:document.getElementById('py-date').value,amount,deducted:autoDeduct,deductReason:reason,ref:document.getElementById('py-ref').value.trim(),notes:document.getElementById('py-notes').value.trim(),by:U.user.uid};
+  // Use manually entered deduct value (auto-filled but editable)
+  const manualDeduct=parseFloat(document.getElementById('py-deduct').value)||0;
+  const newDeduct=manualDeduct;
+  const payment={date:document.getElementById('py-date').value,amount,deducted:manualDeduct,deductReason:reason,ref:document.getElementById('py-ref').value.trim(),notes:document.getElementById('py-notes').value.trim(),by:U.user.uid};
   const newStatus=settle?'settled':document.getElementById('py-status').value;
   const batch=db.batch();
   batch.update(db.collection('factures').doc(payFacId),{payments:firebase.firestore.FieldValue.arrayUnion(payment),totalReceived:newRec,totalDeducted:newDeduct,status:newStatus});

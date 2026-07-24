@@ -478,7 +478,7 @@ tr:last-child td{border-bottom:none}
         <div class="btn-row" style="margin-bottom:14px">
           <button class="btn btn-p" onclick="openBankModal()" id="btn-bank-tx">+ Record Transaction</button>
           <button class="btn btn-s" onclick="openSettingBalance()">Set Opening Balance</button>
-          ${isMD()?`<button class="btn btn-err" onclick="resetBank()" style="margin-left:auto">🗑 Reset Bank</button>`:''}
+
         </div>
         <div class="fbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-end">
           <div class="fl"><label>Filter by Date</label><input type="date" id="bk-view-date" onchange="renderBankFiltered()"></div>
@@ -671,7 +671,7 @@ tr:last-child td{border-bottom:none}
     <div id="pay-fac-info" style="font-size:13px;color:var(--t2);margin-bottom:14px;padding:10px;background:var(--s1);border-radius:6px"></div>
     <div class="fg c2">
       <div class="fl"><label>Payment Date</label><input type="date" id="py-date"></div>
-      <div class="fl"><label>Amount Received (RWF)</label><input type="number" id="py-amount" placeholder="0" min="0" oninput="calcDeducted()"></div>
+      <div class="fl"><label>Amount Received (RWF)</label><input type="number" id="py-amount" placeholder="0" min="0" ></div>
     </div>
     <div class="fg c2">
       <div class="fl"><label>Bank Reference / Receipt No.</label><input type="text" id="py-ref" placeholder="Optional"></div>
@@ -681,13 +681,13 @@ tr:last-child td{border-bottom:none}
       <div class="fl"><label>Notes</label><textarea id="py-notes" placeholder="Optional"></textarea></div>
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--s2)">
-      <div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.5px;margin-bottom:10px">IF INSURANCE DEDUCTED / REFUSED PART OF THE AMOUNT</div>
-      <div class="fg c2">
-        <div class="fl"><label>Amount Deducted / Rejected (RWF) <span style="font-size:10px;color:#00838f">(auto-calculated)</span></label><input type="number" id="py-deduct" placeholder="Auto" style="background:#f5f5f5;color:var(--t2)" readonly></div>
-        <div class="fl"><label>Reason for Deduction</label><input type="text" id="py-reason" placeholder="e.g. Wrong claim form..."></div>
+      <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40">
+        <strong>Record Payment Only</strong> — insurance may still pay the rest later.<br>
+        <strong>Settle &amp; Close</strong> — insurance will pay no more. Remaining amount auto-recorded as deduction. Invoice removed from outstanding.
       </div>
-      <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40;margin-top:8px">
-        Use <strong>Settle &amp; Close</strong> when insurance will pay no more. Invoice disappears from outstanding receivables.
+      <div class="fg c2" style="margin-top:10px">
+        <div class="fl"><label>Reason for Deduction (if any)</label><input type="text" id="py-reason" placeholder="e.g. Wrong claim form, coding error..."></div>
+        <input type="hidden" id="py-deduct" value="0">
       </div>
     </div>
     <div class="modal-actions">
@@ -1032,7 +1032,11 @@ function switchPanel(name){
   if(name==='expenses') populateDDs();
   if(name==='factures'){populateDDs();renderFacs();}
   if(name==='consultations') renderConsult();
-  if(name==='bank'){renderBank();renderBankFiltered();renderBankBalance();}
+  if(name==='bank'){
+    renderBank();renderBankFiltered();renderBankBalance();
+    const rb=document.getElementById('btn-reset-bank');
+    if(rb) rb.style.display=isMD()?'':'none';
+  }
   if(name==='reports') renderReports();
   if(name==='users'){renderUsers();renderRoleGuide();}
   if(name==='settings'){renderSettings();renderPermMatrix();}
@@ -1194,11 +1198,12 @@ async function savePay(settle){
   const amount=parseFloat(document.getElementById('py-amount').value)||0;
   if(!amount){alert('Enter payment amount.');return;}
   const f=D.facs.find(x=>x.id===payFacId);
-  const deduct=parseFloat(document.getElementById('py-deduct').value)||0;
   const reason=document.getElementById('py-reason').value.trim();
-  const payment={date:document.getElementById('py-date').value,amount,deducted:deduct,deductReason:reason,ref:document.getElementById('py-ref').value.trim(),notes:document.getElementById('py-notes').value.trim(),by:U.user.uid};
   const newRec=(f.totalReceived||0)+amount;
-  const newDeduct=(f.totalDeducted||0)+deduct;
+  // Auto-calculate deducted: if settling, remaining unpaid = deducted
+  const autoDeduct=settle?Math.max(0,(f.totalClaimed||0)-newRec):0;
+  const newDeduct=autoDeduct;
+  const payment={date:document.getElementById('py-date').value,amount,deducted:autoDeduct,deductReason:reason,ref:document.getElementById('py-ref').value.trim(),notes:document.getElementById('py-notes').value.trim(),by:U.user.uid};
   const newStatus=settle?'settled':document.getElementById('py-status').value;
   const batch=db.batch();
   batch.update(db.collection('factures').doc(payFacId),{payments:firebase.firestore.FieldValue.arrayUnion(payment),totalReceived:newRec,totalDeducted:newDeduct,status:newStatus});
@@ -1913,6 +1918,8 @@ async function saveEditExp(){
 // ============ BANK MANAGEMENT ============
 let currentBank='IM';
 function switchBank(bank){
+  const rb=document.getElementById('btn-reset-bank');
+  if(rb) rb.style.display=isMD()?'':'none';
   currentBank=bank;
   document.getElementById('bk-tab-im').className=bank==='IM'?'btn btn-p':'btn btn-s';
   document.getElementById('bk-tab-um').className=bank==='Umutanguha'?'btn btn-p':'btn btn-s';

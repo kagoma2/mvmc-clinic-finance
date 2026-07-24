@@ -1315,7 +1315,12 @@ function renderDash(){
   const tP=mRevs.reduce((s,r)=>s+r.pat,0);
   const tE=mExps.reduce((s,e)=>s+e.amount,0);
   const bal=tR-tE;
-  const outstanding=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').reduce((s,f)=>s+(f.totalClaimed||0)-(f.totalReceived||0)-(f.totalDeducted||0),0);
+  const outstanding=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').reduce((s,f)=>{
+    const pmts=f.payments||[];
+    const rec=pmts.reduce((a,p)=>a+(p.amount||0),0)||f.totalReceived||0;
+    const ded=Math.max(0,pmts.reduce((a,p)=>a+Math.max(0,p.deducted||0),0)||f.totalDeducted||0);
+    return s+(f.totalClaimed||0)-rec-ded;
+  },0);
   const bankBal=calcBankBalance();
   const mn=now.toLocaleDateString('en',{month:'long',year:'numeric'});
 
@@ -1446,6 +1451,11 @@ function renderFacsSimple(){
   const open=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled');
   if(!open.length){tb.innerHTML=`<tr><td colspan="7" class="empty">No outstanding insurance payments.</td></tr>`;return;}
   tb.innerHTML=open.map(f=>{
+    const payments=f.payments||[];
+    const totalReceived=payments.reduce((s,p)=>s+(p.amount||0),0);
+    const totalDeducted=Math.max(0,payments.reduce((s,p)=>s+Math.max(0,p.deducted||0),0));
+    f.totalReceived=totalReceived||f.totalReceived||0;
+    f.totalDeducted=totalDeducted||f.totalDeducted||0;
     const out=(f.totalClaimed||0)-(f.totalReceived||0)-(f.totalDeducted||0);
     return `<tr>
       <td><span class="itag">${f.insurance}</span></td>
@@ -1467,6 +1477,13 @@ function renderFacs(){
   if(!tb) return;
   if(!D.facs.length){tb.innerHTML=`<tr><td colspan="7" class="empty">No factures yet. Create one to start tracking insurance billing.</td></tr>`;return;}
   tb.innerHTML=D.facs.map(f=>{
+    // Always recalculate from payments array to stay in sync
+    const payments=f.payments||[];
+    const totalReceived=payments.reduce((s,p)=>s+(p.amount||0),0);
+    const totalDeducted=Math.max(0,payments.reduce((s,p)=>s+Math.max(0,p.deducted||0),0));
+    // Update f fields to match (in-memory only)
+    f.totalReceived=totalReceived||f.totalReceived||0;
+    f.totalDeducted=totalDeducted||f.totalDeducted||0;
     const out=(f.totalClaimed||0)-(f.totalReceived||0)-(f.totalDeducted||0);
     const sc=f.status==='paid'?'s-paid':f.status==='submitted'?'s-submitted':f.status==='partial'?'s-partial':f.status==='disputed'?'s-disputed':f.status==='settled'?'s-settled':'s-draft';
     return `<tr>
@@ -1918,13 +1935,10 @@ async function saveEditPay(){
     // Update local D.facs immediately so table refreshes right away
     const facIdx=D.facs.findIndex(x=>x.id===editPayFacId);
     if(facIdx>=0){
-      D.facs[facIdx]={
-        ...D.facs[facIdx],
-        payments:newPayments,
-        totalReceived:newTotalReceived,
-        totalDeducted:newTotalDeducted,
-        status:newStatus
-      };
+      D.facs[facIdx].payments=newPayments;
+      D.facs[facIdx].totalReceived=newTotalReceived;
+      D.facs[facIdx].totalDeducted=newTotalDeducted;
+      D.facs[facIdx].status=newStatus;
     }
     closeEditPayModal();
     renderFacs();

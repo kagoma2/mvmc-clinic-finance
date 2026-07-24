@@ -457,11 +457,28 @@ tr:last-child td{border-bottom:none}
     <div id="p-bank" class="panel">
       <div class="kpi-grid" id="bank-kpis"></div>
       <div class="sec">
-        <div class="sec-title">Bank Transactions</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+          <div class="sec-title" style="margin-bottom:0">Bank Accounts</div>
+          <div style="display:flex;gap:8px">
+            <button id="bk-tab-im" class="btn btn-p" onclick="switchBank('IM')" style="font-weight:700">🏦 IM Bank (Main)</button>
+            <button id="bk-tab-um" class="btn btn-s" onclick="switchBank('Umutanguha')">🏦 Umutanguha</button>
+          </div>
+        </div>
         <div id="bank-ok" class="alert alert-ok"></div>
+        <div id="bank-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">
+          <div style="background:var(--s1);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--t2);font-weight:600">CURRENT BANK</div>
+            <div id="bk-name-badge" style="font-size:15px;font-weight:700;color:var(--p);margin-top:4px">IM Bank</div>
+          </div>
+          <div style="background:var(--s1);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:11px;color:var(--t2);font-weight:600">BALANCE</div>
+            <div id="bk-balance-badge" style="font-size:15px;font-weight:700;color:var(--p);margin-top:4px">—</div>
+          </div>
+        </div>
         <div class="btn-row" style="margin-bottom:14px">
           <button class="btn btn-p" onclick="openBankModal()" id="btn-bank-tx">+ Record Transaction</button>
           <button class="btn btn-s" onclick="openSettingBalance()">Set Opening Balance</button>
+          ${isMD()?`<button class="btn btn-err" onclick="resetBank()" style="margin-left:auto">🗑 Reset Bank</button>`:''}
         </div>
         <div class="fbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-end">
           <div class="fl"><label>Filter by Date</label><input type="date" id="bk-view-date" onchange="renderBankFiltered()"></div>
@@ -654,7 +671,7 @@ tr:last-child td{border-bottom:none}
     <div id="pay-fac-info" style="font-size:13px;color:var(--t2);margin-bottom:14px;padding:10px;background:var(--s1);border-radius:6px"></div>
     <div class="fg c2">
       <div class="fl"><label>Payment Date</label><input type="date" id="py-date"></div>
-      <div class="fl"><label>Amount Received (RWF)</label><input type="number" id="py-amount" placeholder="0" min="0"></div>
+      <div class="fl"><label>Amount Received (RWF)</label><input type="number" id="py-amount" placeholder="0" min="0" oninput="calcDeducted()"></div>
     </div>
     <div class="fg c2">
       <div class="fl"><label>Bank Reference / Receipt No.</label><input type="text" id="py-ref" placeholder="Optional"></div>
@@ -666,7 +683,7 @@ tr:last-child td{border-bottom:none}
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--s2)">
       <div style="font-size:11px;font-weight:700;color:var(--t2);letter-spacing:.5px;margin-bottom:10px">IF INSURANCE DEDUCTED / REFUSED PART OF THE AMOUNT</div>
       <div class="fg c2">
-        <div class="fl"><label>Amount Deducted / Rejected (RWF)</label><input type="number" id="py-deduct" placeholder="0 if none" min="0"></div>
+        <div class="fl"><label>Amount Deducted / Rejected (RWF) <span style="font-size:10px;color:#00838f">(auto-calculated)</span></label><input type="number" id="py-deduct" placeholder="Auto" style="background:#f5f5f5;color:var(--t2)" readonly></div>
         <div class="fl"><label>Reason for Deduction</label><input type="text" id="py-reason" placeholder="e.g. Wrong claim form..."></div>
       </div>
       <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40;margin-top:8px">
@@ -685,9 +702,11 @@ tr:last-child td{border-bottom:none}
   <div class="modal">
     <div class="modal-title">Record Bank Transaction</div>
     <div class="fg c2">
+      <div class="fl"><label>Bank Account</label><select id="bk-bank"><option value="IM">IM Bank (Main)</option><option value="Umutanguha">Umutanguha</option></select></div>
       <div class="fl"><label>Date</label><input type="date" id="bk-date"></div>
-      <div class="fl"><label>Type</label><select id="bk-type"><option value="credit">Credit (Money In)</option><option value="debit">Debit (Money Out)</option></select></div>
     </div>
+    <div class="fg c2">
+      <div class="fl"><label>Type</label><select id="bk-type"><option value="credit">Credit (Money In)</option><option value="debit">Debit (Money Out)</option></select></div>
     <div class="fg c2">
       <div class="fl"><label>Amount (RWF)</label><input type="number" id="bk-amount" placeholder="0" min="0"></div>
       <div class="fl"><label>Category</label><select id="bk-cat" onchange="toggleBkExpCat()"><option value="patient_cash">Patient Cash (In)</option><option value="insurance_payment">Insurance Payment (In)</option><option value="expense">Expense Payment (Out)</option><option value="salary">Staff Salary (Out)</option><option value="withdrawal">Withdrawal (Out)</option><option value="other">Other</option></select></div>
@@ -711,7 +730,10 @@ tr:last-child td{border-bottom:none}
     <div class="modal-title">Set Opening Bank Balance</div>
     <p style="font-size:13px;color:var(--t2);margin-bottom:14px">Enter the bank balance at the start of your record-keeping. All subsequent transactions will be tracked from this point.</p>
     <div class="fg c2">
+      <div class="fl"><label>Bank Account</label><select id="ob-bank"><option value="IM">IM Bank (Main)</option><option value="Umutanguha">Umutanguha</option></select></div>
       <div class="fl"><label>Opening Balance (RWF)</label><input type="number" id="ob-amount" placeholder="0" min="0"></div>
+    </div>
+    <div class="fg c2">
       <div class="fl"><label>As of Date</label><input type="date" id="ob-date"></div>
     </div>
     <div class="modal-actions">
@@ -927,7 +949,7 @@ function setupListeners(){
   listen('revenues','revs',()=>{renderDash();renderRevSummary();renderReports();});
   listen('expenses','exps',()=>{renderDash();renderExpSummary();renderReports();});
   listen('factures','facs',()=>{renderDash();renderFacs();renderReports();});
-  listen('bankTx','bankTx',()=>{renderBankFiltered();renderDash();});
+  listen('bankTx','bankTx',()=>{renderBankFiltered();renderBankBalance();renderDash();});
   if(canAdmin()){
     const u=db.collection('users').onSnapshot(snap=>{D.users=snap.docs.map(d=>({id:d.id,...d.data()}));renderUsers();},e=>console.warn('users',e));
     unsubs.push(u);
@@ -1010,7 +1032,7 @@ function switchPanel(name){
   if(name==='expenses') populateDDs();
   if(name==='factures'){populateDDs();renderFacs();}
   if(name==='consultations') renderConsult();
-  if(name==='bank'){renderBank();renderBankFiltered();}
+  if(name==='bank'){renderBank();renderBankFiltered();renderBankBalance();}
   if(name==='reports') renderReports();
   if(name==='users'){renderUsers();renderRoleGuide();}
   if(name==='settings'){renderSettings();renderPermMatrix();}
@@ -1143,6 +1165,15 @@ async function saveFac(){
 }
 
 // PAYMENT RECORDING
+function calcDeducted(){
+  const f=D.facs.find(x=>x.id===payFacId);
+  if(!f) return;
+  const received=parseFloat(document.getElementById('py-amount').value)||0;
+  const alreadyReceived=f.totalReceived||0;
+  const totalReceived=alreadyReceived+received;
+  const deducted=Math.max(0,(f.totalClaimed||0)-totalReceived);
+  document.getElementById('py-deduct').value=deducted>0?deducted:0;
+}
 function openPayModal(facId){
   payFacId=facId;
   const f=D.facs.find(x=>x.id===facId);
@@ -1195,6 +1226,7 @@ async function saveBankTx(){
     category:bkCat,
     expenseCategory:expCat,
     expenseReason:expReason,
+    bank:document.getElementById('bk-bank')?document.getElementById('bk-bank').value:'IM',
     by:U.user.uid,
     byName:U.name,
     createdAt:Date.now(),
@@ -1878,6 +1910,43 @@ async function saveEditExp(){
   }catch(err){alert('Could not save: '+err.message);}
 }
 
+// ============ BANK MANAGEMENT ============
+let currentBank='IM';
+function switchBank(bank){
+  currentBank=bank;
+  document.getElementById('bk-tab-im').className=bank==='IM'?'btn btn-p':'btn btn-s';
+  document.getElementById('bk-tab-um').className=bank==='Umutanguha'?'btn btn-p':'btn btn-s';
+  document.getElementById('bk-name-badge').textContent=bank==='IM'?'IM Bank (Main)':'Umutanguha Bank';
+  if(document.getElementById('bk-bank')) document.getElementById('bk-bank').value=bank;
+  renderBankFiltered();
+  renderBankBalance();
+}
+function renderBankBalance(){
+  const txs=D.bankTx.filter(t=>(t.bank||'IM')===currentBank);
+  const ob=D.settings['openingBalance_'+currentBank]||D.settings.openingBalance||0;
+  const credits=txs.filter(t=>t.type==='credit').reduce((s,t)=>s+(t.amount||0),0);
+  const debits=txs.filter(t=>t.type==='debit').reduce((s,t)=>s+(t.amount||0),0);
+  const balance=ob+credits-debits;
+  const el=document.getElementById('bk-balance-badge');
+  if(el){el.textContent=fmt(balance)+' RWF';el.style.color=balance>=0?'var(--ok)':'var(--err)';}
+}
+async function resetBank(){
+  if(!isMD()){alert('Only Managing Director can reset the bank.');return;}
+  const bankName=currentBank==='IM'?'IM Bank (Main)':'Umutanguha Bank';
+  if(!confirm('Reset ALL transactions for '+bankName+'? This cannot be undone. Only transactions for this bank will be deleted.')) return;
+  const snap=await db.collection('bankTx').where('bank','==',currentBank).get();
+  const batch=db.batch();
+  snap.docs.forEach(d=>batch.delete(d.ref));
+  // Also delete untagged IM transactions if resetting IM
+  if(currentBank==='IM'){
+    const snap2=await db.collection('bankTx').get();
+    snap2.docs.filter(d=>!d.data().bank).forEach(d=>batch.delete(d.ref));
+  }
+  await batch.commit();
+  showOk('bank-ok','✓ '+bankName+' has been reset. Set your opening balance now.');
+  renderBankFiltered();
+  renderBankBalance();
+}
 // ============ BANK EDIT ============
 let editBankId=null;
 function openEditBank(id){
@@ -1933,7 +2002,8 @@ function setBankViewToday(){
 function renderBankFiltered(){
   const d=document.getElementById('bk-view-date');
   const dt=d&&d.value?d.value:null;
-  const rows=dt?D.bankTx.filter(t=>t.date===dt):D.bankTx;
+  const bankTxFiltered=D.bankTx.filter(t=>(t.bank||'IM')===currentBank);
+  const rows=dt?bankTxFiltered.filter(t=>t.date===dt):bankTxFiltered;
   const sorted=rows.slice().sort((a,b)=>b.date.localeCompare(a.date));
   const tb=document.getElementById('bank-tbody');
   if(!tb) return;

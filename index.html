@@ -1435,26 +1435,11 @@ function calcBankBalance(){
 }
 
 function renderBank(){
-  const bal=calcBankBalance();
-  const totalCred=D.bankTx.filter(t=>t.type==='credit').reduce((s,t)=>s+t.amount,0);
-  const totalDeb=D.bankTx.filter(t=>t.type==='debit').reduce((s,t)=>s+t.amount,0);
-  const bk=document.getElementById('bank-kpis');
-  if(bk) bk.innerHTML=`
-    <div class="kpi pu"><div class="kpi-label">Current Balance</div><div class="kpi-val pur">RWF ${fmt(bal)}</div><div class="kpi-sub">Opening: RWF ${fmt(D.settings.openingBalance||0)}</div></div>
-    <div class="kpi gr"><div class="kpi-label">Total Credits</div><div class="kpi-val pos">RWF ${fmt(totalCred)}</div><div class="kpi-sub">${D.bankTx.filter(t=>t.type==='credit').length} transactions</div></div>
-    <div class="kpi rd"><div class="kpi-label">Total Debits</div><div class="kpi-val neg">RWF ${fmt(totalDeb)}</div><div class="kpi-sub">${D.bankTx.filter(t=>t.type==='debit').length} transactions</div></div>
-  `;
-  const tb=document.getElementById('bank-tbody');
-  if(!tb) return;
-  if(!D.bankTx.length){tb.innerHTML=`<tr><td colspan="6" class="empty">No bank transactions yet.</td></tr>`;return;}
-  tb.innerHTML=D.bankTx.map(t=>`<tr>
-    <td>${fmtD(t.date)}</td>
-    <td>${t.description||'—'}</td>
-    <td><span class="bd ${t.category==='insurance_payment'?'bg-b':t.category==='patient_cash'?'bg-g':t.category==='expense'?'bg-r':'bg-gr'}">${t.category?.replace(/_/g,' ')||'—'}</span></td>
-    <td style="color:var(--ok);font-weight:${t.type==='credit'?'700':'400'}">${t.type==='credit'?fmt(t.amount):'—'}</td>
-    <td style="color:var(--err);font-weight:${t.type==='debit'?'700':'400'}">${t.type==='debit'?fmt(t.amount):'—'}</td>
-    <td>${canAdmin()?`<button class="btn btn-d sm" onclick="delBank('${t.id}')">Del</button>`:''}</td>
-  </tr>`).join('');
+  // Update bank KPI grid with current bank stats
+  renderBankBalance();
+  // Show/hide reset button based on role
+  const rb=document.getElementById('btn-reset-bank');
+  if(rb) rb.style.display=isMD()?'':'none';
 }
 
 // REPORTS

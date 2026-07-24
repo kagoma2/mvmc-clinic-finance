@@ -1452,7 +1452,7 @@ function renderFacsSimple(){
       <td>${fmtD(f.periodFrom)} – ${fmtD(f.periodTo)}</td>
       <td>${fmt(f.totalClaimed)}</td>
       <td style="color:var(--ok)">${fmt(f.totalReceived||0)}</td>
-      <td style="color:var(--err)">${fmt(f.totalDeducted||0)}</td>
+      <td style="color:var(--err)">${fmt(Math.max(0,f.totalDeducted||0))}</td>
       <td style="font-weight:700;color:var(--warn)">${fmt(out)}</td>
       <td><span class="s-submitted">Pending</span></td>
       <td><button class="btn btn-ok sm" onclick="openPayModal('${f.id}')">Record Payment</button></td>
@@ -1915,7 +1915,20 @@ async function saveEditPay(){
       totalDeducted:newTotalDeducted,
       status:newStatus
     });
+    // Update local D.facs immediately so table refreshes right away
+    const facIdx=D.facs.findIndex(x=>x.id===editPayFacId);
+    if(facIdx>=0){
+      D.facs[facIdx]={
+        ...D.facs[facIdx],
+        payments:newPayments,
+        totalReceived:newTotalReceived,
+        totalDeducted:newTotalDeducted,
+        status:newStatus
+      };
+    }
     closeEditPayModal();
+    renderFacs();
+    renderDash();
     showOk('fac-ok','✓ Payment updated successfully!');
   }catch(e){alert('Could not save: '+e.message);}
 }

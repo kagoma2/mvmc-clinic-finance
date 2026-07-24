@@ -997,7 +997,15 @@ function setupListeners(){
   unsubs.forEach(u=>u()); unsubs=[];
   const listen=(col,key,cb)=>{
     const u=db.collection(col).orderBy('ts','desc').onSnapshot(snap=>{
-      D[key]=snap.docs.map(d=>({id:d.id,...d.data()}));
+      D[key]=snap.docs.map(d=>{
+        const data={id:d.id,...d.data()};
+        // Normalize factures: always recalculate totals from payments array
+        if(col==='factures'&&data.payments&&data.payments.length>0){
+          data.totalReceived=data.payments.reduce((s,p)=>s+Number(p.amount||0),0);
+          data.totalDeducted=Math.max(0,data.payments.reduce((s,p)=>s+Math.max(0,Number(p.deducted||0)),0));
+        }
+        return data;
+      });
       if(cb)cb();
     },e=>console.warn(col,e));
     unsubs.push(u);
@@ -1477,19 +1485,16 @@ function renderFacs(){
   if(!tb) return;
   if(!D.facs.length){tb.innerHTML=`<tr><td colspan="7" class="empty">No factures yet. Create one to start tracking insurance billing.</td></tr>`;return;}
   tb.innerHTML=D.facs.map(f=>{
-    // Always recalculate from payments array to stay in sync
-    const payments=f.payments||[];
-    const calcReceived=payments.reduce((s,p)=>s+Number(p.amount||0),0);
-    const calcDeducted=payments.reduce((s,p)=>s+Math.max(0,Number(p.deducted||0)),0);
-    const dispReceived=calcReceived>0?calcReceived:(f.totalReceived||0);
-    const dispDeducted=calcDeducted>0?calcDeducted:(f.totalDeducted||0);
+    const dispReceived=f.totalReceived||0;
+    const dispDeducted=Math.max(0,f.totalDeducted||0);
     const out=Math.max(0,(f.totalClaimed||0)-dispReceived-dispDeducted);
     const sc=f.status==='paid'?'s-paid':f.status==='submitted'?'s-submitted':f.status==='partial'?'s-partial':f.status==='disputed'?'s-disputed':f.status==='settled'?'s-settled':'s-draft';
     return `<tr>
       <td><span class="itag">${f.insurance}</span></td>
       <td>${fmtD(f.periodFrom)} – ${fmtD(f.periodTo)}</td>
       <td style="font-weight:700">${fmt(f.totalClaimed)}</td>
-      <td style="color:var(--ok);font-weight:700">${fmt(f.totalReceived||0)}</td>
+      <td style="color:var(--ok);font-weight:700">${fmt(dispReceived)}</td>
+      <td style="color:var(--err);font-weight:700">${fmt(dispDeducted)}</td>
       <td style="font-weight:700;color:${out>0?'var(--warn)':'var(--ok)'}">${fmt(out)}</td>
       <td><span class="${sc}">${f.status}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">

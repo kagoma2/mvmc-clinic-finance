@@ -1452,11 +1452,11 @@ function renderFacsSimple(){
   if(!open.length){tb.innerHTML=`<tr><td colspan="7" class="empty">No outstanding insurance payments.</td></tr>`;return;}
   tb.innerHTML=open.map(f=>{
     const payments=f.payments||[];
-    const totalReceived=payments.reduce((s,p)=>s+(p.amount||0),0);
-    const totalDeducted=Math.max(0,payments.reduce((s,p)=>s+Math.max(0,p.deducted||0),0));
-    f.totalReceived=totalReceived||f.totalReceived||0;
-    f.totalDeducted=totalDeducted||f.totalDeducted||0;
-    const out=(f.totalClaimed||0)-(f.totalReceived||0)-(f.totalDeducted||0);
+    const calcReceived=payments.reduce((s,p)=>s+Number(p.amount||0),0);
+    const calcDeducted=payments.reduce((s,p)=>s+Math.max(0,Number(p.deducted||0)),0);
+    const dispReceived=calcReceived>0?calcReceived:(f.totalReceived||0);
+    const dispDeducted=calcDeducted>0?calcDeducted:(f.totalDeducted||0);
+    const out=Math.max(0,(f.totalClaimed||0)-dispReceived-dispDeducted);
     return `<tr>
       <td><span class="itag">${f.insurance}</span></td>
       <td>${fmtD(f.periodFrom)} – ${fmtD(f.periodTo)}</td>
@@ -1479,12 +1479,11 @@ function renderFacs(){
   tb.innerHTML=D.facs.map(f=>{
     // Always recalculate from payments array to stay in sync
     const payments=f.payments||[];
-    const totalReceived=payments.reduce((s,p)=>s+(p.amount||0),0);
-    const totalDeducted=Math.max(0,payments.reduce((s,p)=>s+Math.max(0,p.deducted||0),0));
-    // Update f fields to match (in-memory only)
-    f.totalReceived=totalReceived||f.totalReceived||0;
-    f.totalDeducted=totalDeducted||f.totalDeducted||0;
-    const out=(f.totalClaimed||0)-(f.totalReceived||0)-(f.totalDeducted||0);
+    const calcReceived=payments.reduce((s,p)=>s+Number(p.amount||0),0);
+    const calcDeducted=payments.reduce((s,p)=>s+Math.max(0,Number(p.deducted||0)),0);
+    const dispReceived=calcReceived>0?calcReceived:(f.totalReceived||0);
+    const dispDeducted=calcDeducted>0?calcDeducted:(f.totalDeducted||0);
+    const out=Math.max(0,(f.totalClaimed||0)-dispReceived-dispDeducted);
     const sc=f.status==='paid'?'s-paid':f.status==='submitted'?'s-submitted':f.status==='partial'?'s-partial':f.status==='disputed'?'s-disputed':f.status==='settled'?'s-settled':'s-draft';
     return `<tr>
       <td><span class="itag">${f.insurance}</span></td>

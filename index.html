@@ -665,6 +665,59 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+<!-- PAYMENTS HISTORY MODAL -->
+<div id="modal-pay-history" class="modal-bg">
+  <div class="modal" style="max-width:700px;width:95%">
+    <div class="modal-title" id="pay-history-title">Payment History</div>
+    <div id="pay-history-info" style="font-size:13px;color:var(--t2);margin-bottom:14px;padding:10px;background:var(--s1);border-radius:6px"></div>
+    <div class="tw">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Amount Received</th>
+            <th>Deducted</th>
+            <th>Reason</th>
+            <th>Reference</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="pay-history-tbody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-s" onclick="document.getElementById('modal-pay-history').classList.remove('on')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PAYMENT MODAL -->
+<div id="modal-edit-pay" class="modal-bg">
+  <div class="modal">
+    <div class="modal-title">Edit Payment Record</div>
+    <div id="edit-pay-info" style="font-size:13px;color:var(--t2);margin-bottom:14px;padding:10px;background:var(--s1);border-radius:6px"></div>
+    <div class="fg c2">
+      <div class="fl"><label>Payment Date</label><input type="date" id="ep-date"></div>
+      <div class="fl"><label>Amount Received (RWF)</label><input type="number" id="ep-amount" min="0" oninput="calcEditDeducted()"></div>
+    </div>
+    <div class="fg c2">
+      <div class="fl"><label>Amount Deducted (RWF) <span style="font-size:10px;color:#00838f">auto-filled, editable</span></label><input type="number" id="ep-deduct" min="0" value="0"></div>
+      <div class="fl"><label>Reason for Deduction</label><input type="text" id="ep-reason" placeholder="e.g. Wrong claim form..."></div>
+    </div>
+    <div class="fg c2">
+      <div class="fl"><label>Bank Reference</label><input type="text" id="ep-ref" placeholder="Optional"></div>
+      <div class="fl"><label>Status</label><select id="ep-status"><option value="partial">Partially Paid</option><option value="paid">Fully Paid</option><option value="settled">Settled &amp; Closed</option></select></div>
+    </div>
+    <div class="fg">
+      <div class="fl"><label>Notes</label><textarea id="ep-notes" placeholder="Optional"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-s" onclick="closeEditPayModal()">Cancel</button>
+      <button class="btn btn-ok" onclick="saveEditPay()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <div id="modal-pay" class="modal-bg">
   <div class="modal">
     <div class="modal-title">Record Insurance Payment</div>
@@ -1424,7 +1477,7 @@ function renderFacs(){
       <td style="font-weight:700;color:${out>0?'var(--warn)':'var(--ok)'}">${fmt(out)}</td>
       <td><span class="${sc}">${f.status}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
-        ${canWrite()?`<button class="btn btn-p sm" onclick="openPayModal('${f.id}')">Record Payment</button><button class="btn btn-s sm" onclick="openFacModal('${f.id}')">Edit</button>`:''}
+        ${canWrite()?`<button class="btn btn-p sm" onclick="openPayModal('${f.id}')">Record Payment</button><button class="btn btn-s sm" onclick="openFacModal('${f.id}')">Edit</button><button class="btn btn-s sm" onclick="viewPayments('${f.id}')" style="color:var(--p)">Payments</button>`:''}
         ${canAdmin()?`<button class="btn btn-d sm" onclick="delFac('${f.id}')">Del</button>`:''}
       </td>
     </tr>`;
@@ -1762,6 +1815,94 @@ window.addEventListener('load',()=>{
   cvFrom=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
   cvTo=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
 });
+
+// ============ EDIT PAYMENT ============
+let editPayFacId=null, editPayIndex=null;
+
+function calcEditDeducted(){
+  const f=D.facs.find(x=>x.id===editPayFacId);
+  if(!f) return;
+  const received=parseFloat(document.getElementById('ep-amount').value)||0;
+  const otherPayments=(f.payments||[]).filter((_,i)=>i!==editPayIndex).reduce((s,p)=>s+(p.amount||0),0);
+  const deducted=Math.max(0,(f.totalClaimed||0)-otherPayments-received);
+  document.getElementById('ep-deduct').value=deducted;
+}
+
+function viewPayments(facId){
+  const f=D.facs.find(x=>x.id===facId);
+  if(!f) return;
+  const payments=f.payments||[];
+  const modal=document.getElementById('modal-pay-history');
+  document.getElementById('pay-history-title').textContent=f.insurance+' — '+fmtD(f.periodFrom)+' to '+fmtD(f.periodTo);
+  document.getElementById('pay-history-info').innerHTML=`Billed: <strong>RWF ${fmt(f.totalClaimed)}</strong> &bull; Received: <strong style="color:var(--ok)">RWF ${fmt(f.totalReceived||0)}</strong> &bull; Deducted: <strong style="color:var(--err)">RWF ${fmt(f.totalDeducted||0)}</strong>`;
+  const tbody=document.getElementById('pay-history-tbody');
+  if(!payments.length){
+    tbody.innerHTML='<tr><td colspan="6" class="empty">No payments recorded yet.</td></tr>';
+  } else {
+    tbody.innerHTML=payments.map((p,i)=>`<tr>
+      <td>${fmtD(p.date)}</td>
+      <td style="color:var(--ok);font-weight:700">RWF ${fmt(p.amount||0)}</td>
+      <td style="color:var(--err)">${p.deducted?'RWF '+fmt(p.deducted):'—'}</td>
+      <td>${p.deductReason||'—'}</td>
+      <td>${p.ref||'—'}</td>
+      <td><button class="btn btn-s sm" onclick="openEditPayModal('${facId}',${i});document.getElementById('modal-pay-history').classList.remove('on')">Edit</button></td>
+    </tr>`).join('');
+  }
+  modal.classList.add('on');
+}
+
+function openEditPayModal(facId, payIndex){
+  const f=D.facs.find(x=>x.id===facId);
+  if(!f) return;
+  const p=f.payments[payIndex];
+  editPayFacId=facId;
+  editPayIndex=payIndex;
+  document.getElementById('edit-pay-info').innerHTML=`<strong>${f.insurance}</strong> — Billed: RWF ${fmt(f.totalClaimed)} — Editing Payment ${payIndex+1} of ${f.payments.length}`;
+  document.getElementById('ep-date').value=p.date||today();
+  document.getElementById('ep-amount').value=p.amount||0;
+  document.getElementById('ep-deduct').value=p.deducted||0;
+  document.getElementById('ep-reason').value=p.deductReason||'';
+  document.getElementById('ep-ref').value=p.ref||'';
+  document.getElementById('ep-notes').value=p.notes||'';
+  document.getElementById('ep-status').value=f.status||'partial';
+  document.getElementById('modal-edit-pay').classList.add('on');
+}
+
+function closeEditPayModal(){
+  document.getElementById('modal-edit-pay').classList.remove('on');
+  editPayFacId=null; editPayIndex=null;
+}
+
+async function saveEditPay(){
+  const f=D.facs.find(x=>x.id===editPayFacId);
+  if(!f) return;
+  const newPayments=[...f.payments];
+  const newAmount=parseFloat(document.getElementById('ep-amount').value)||0;
+  const newDeduct=parseFloat(document.getElementById('ep-deduct').value)||0;
+  newPayments[editPayIndex]={
+    ...newPayments[editPayIndex],
+    date:document.getElementById('ep-date').value,
+    amount:newAmount,
+    deducted:newDeduct,
+    deductReason:document.getElementById('ep-reason').value.trim(),
+    ref:document.getElementById('ep-ref').value.trim(),
+    notes:document.getElementById('ep-notes').value.trim(),
+    editedAt:Date.now(),editedBy:U.name
+  };
+  const newTotalReceived=newPayments.reduce((s,p)=>s+(p.amount||0),0);
+  const newTotalDeducted=newPayments.reduce((s,p)=>s+(p.deducted||0),0);
+  const newStatus=document.getElementById('ep-status').value;
+  try{
+    await db.collection('factures').doc(editPayFacId).update({
+      payments:newPayments,
+      totalReceived:newTotalReceived,
+      totalDeducted:newTotalDeducted,
+      status:newStatus
+    });
+    closeEditPayModal();
+    showOk('fac-ok','✓ Payment updated successfully!');
+  }catch(e){alert('Could not save: '+e.message);}
+}
 
 let editRevId=null;
 function openEditRev(id){

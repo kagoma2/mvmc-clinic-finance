@@ -1537,7 +1537,7 @@ function renderRevSummary(){
           ${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}
           ${(U.role==='md'||((U.role==='owner'||U.role==='accountant')&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid))?`<button class="btn btn-s sm" onclick="openEditRev('${r.id}')">Edit</button>`:''}
         </td>
-      </tr>`;}).join('');
+      </tr>`).join('');
     }
   }
 }

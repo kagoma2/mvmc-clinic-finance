@@ -1397,10 +1397,13 @@ function renderDash(){
   // New private entries from dedicated private collection
   const mPrivs=(D.privs||[]).filter(r=>{const d=new Date(r.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
   const tNewPriv=mPrivs.reduce((s,r)=>s+(r.total||0),0);
-  const tPrivCollected=mPrivs.reduce((s,r)=>s+(r.collected||0),0);
+  // For old private entries in revenues, collected = pat (patient pays everything)
+  const tOldPrivCollected=oldPrivRevs.reduce((s,r)=>s+(r.pat||r.total||0),0);
+  const tPrivCollected=tOldPrivCollected+mPrivs.reduce((s,r)=>s+(r.collected||0),0);
   const tPriv=tOldPriv+tNewPriv;
   const tR=tInsTotal+tPriv;
-  const tUnalloc=tInsTotal-(tI+tP);
+  // Unallocated = insurance entries where ins+pat was not filled in
+  const tUnalloc=Math.max(0,tInsTotal-(tI+tP));
   const tE=mExps.reduce((s,e)=>s+(e.amount||0),0);
   const bal=tR-tE;
   const outstanding=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').reduce((s,f)=>{
@@ -1416,19 +1419,19 @@ function renderDash(){
   const tWithholding=D.facs.reduce((s,f)=>s+Math.max(0,f.totalWithholding||0),0);
 
   document.getElementById('dash-kpis').innerHTML=`
-    <div class="kpi gr"><div class="kpi-label">Total Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} · ${insRevs.length+mPrivs.length} entries</div></div>
-    <div class="kpi bl"><div class="kpi-label">Insurance Revenue</div><div class="kpi-val blu">RWF ${fmt(tInsTotal)}</div><div class="kpi-sub">${mn} · ${insRevs.length} entries</div></div>
+    <div class="kpi gr"><div class="kpi-label">Total Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} · ${insRevs.length+oldPrivRevs.length+mPrivs.length} entries</div></div>
+    <div class="kpi bl"><div class="kpi-label">Insurance Billed</div><div class="kpi-val blu">RWF ${fmt(tInsTotal)}</div><div class="kpi-sub">${mn} · ${insRevs.length} entries</div></div>
+    <div class="kpi bl"><div class="kpi-label">Insurance Pays</div><div class="kpi-val blu">RWF ${fmt(tI)}</div><div class="kpi-sub">${mn}</div></div>
     <div class="kpi gd"><div class="kpi-label">Patient Co-pay</div><div class="kpi-val gld">RWF ${fmt(tP)}</div><div class="kpi-sub">${mn}</div></div>
-    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Revenue</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">Collected: RWF ${fmt(tPrivCollected)} · ${mPrivs.length+oldPrivRevs.length} entries</div></div>
-    ${tUnalloc>0?`<div class="kpi" style="background:#fff3cd;border:1px solid #ffc107"><div class="kpi-label" style="color:#856404">⚠ Unallocated</div><div class="kpi-val" style="color:#856404">RWF ${fmt(tUnalloc)}</div><div class="kpi-sub" style="color:#856404">Entries missing ins/pat split</div></div>`:''}
-    <div class="kpi" style="background:#fff8e1"><div class="kpi-label" style="color:#e65100">Outstanding Receivables</div><div class="kpi-val" style="color:#e65100">RWF ${fmt(outstanding)}</div><div class="kpi-sub" style="color:#e65100">${D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').length} unpaid factures</div></div>
-    <div class="kpi rd"><div class="kpi-label">Technical Deductions</div><div class="kpi-val neg">RWF ${fmt(tTechDeduct)}</div><div class="kpi-sub">Wrong forms · All time</div></div>
-    <div class="kpi rd"><div class="kpi-label">Withholding Tax</div><div class="kpi-val neg">RWF ${fmt(tWithholding)}</div><div class="kpi-sub">3% insurance tax · All time</div></div>
+    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Revenue</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">Collected: RWF ${fmt(tPrivCollected)} · ${oldPrivRevs.length+mPrivs.length} entries</div></div>
     <div class="kpi rd"><div class="kpi-label">Total Expenses</div><div class="kpi-val neg">RWF ${fmt(tE)}</div><div class="kpi-sub">${mn}</div></div>
     <div class="kpi ${bal>=0?'gr':'rd'}"><div class="kpi-label">Net Balance</div><div class="kpi-val ${bal>=0?'pos':'neg'}">RWF ${fmt(bal)}</div><div class="kpi-sub">${mn}</div></div>
-    <div class="kpi or"><div class="kpi-label">Outstanding Receivables</div><div class="kpi-val" style="color:var(--warn)">RWF ${fmt(outstanding)}</div><div class="kpi-sub">From insurance factures</div></div>
-    <div class="kpi pu"><div class="kpi-label">Bank Balance</div><div class="kpi-val pur">RWF ${fmt(bankBal)}</div><div class="kpi-sub">Current account balance</div></div>
-  `;
+    <div class="kpi" style="background:#fff8e1"><div class="kpi-label" style="color:#e65100">Outstanding</div><div class="kpi-val" style="color:#e65100">RWF ${fmt(outstanding)}</div><div class="kpi-sub" style="color:#e65100">${D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').length} unpaid factures</div></div>
+    <div class="kpi pu"><div class="kpi-label">Bank Balance</div><div class="kpi-val pur">RWF ${fmt(bankBal)}</div><div class="kpi-sub">Current balance</div></div>
+    ${tTechDeduct>0?`<div class="kpi rd"><div class="kpi-label">Tech. Deductions</div><div class="kpi-val neg">RWF ${fmt(tTechDeduct)}</div><div class="kpi-sub">Wrong forms · All time</div></div>`:''}
+    ${tWithholding>0?`<div class="kpi rd"><div class="kpi-label">Withholding Tax</div><div class="kpi-val neg">RWF ${fmt(tWithholding)}</div><div class="kpi-sub">3% tax · All time</div></div>`:''}
+    ${tUnalloc>0?`<div class="kpi" style="background:#fff3cd;border:2px solid #ffc107"><div class="kpi-label" style="color:#856404">⚠ Fix Required</div><div class="kpi-val" style="color:#856404">RWF ${fmt(tUnalloc)}</div><div class="kpi-sub" style="color:#856404">Revenue entries missing ins/pat — check Revenue tab for ⚠</div></div>`:''}
+  `
 
   // Outstanding receivables table - show each unpaid facture with full breakdown
   const unpaidFacs=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled');
@@ -1528,7 +1531,7 @@ function renderRevSummary(){
           ${(U.role==='md'||can('canDelete')||(U.role==='accountant'&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid)||(U.role==='owner'&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid))?`<button class="btn btn-d sm" onclick="delRev('${r.id}')">Del</button>`:''}
           ${(U.role==='md'||((U.role==='owner'||U.role==='accountant')&&r.createdAt&&(Date.now()-r.createdAt)<86400000&&r.by===U.user.uid))?`<button class="btn btn-s sm" onclick="openEditRev('${r.id}')">Edit</button>`:''}
         </td>
-      </tr>`).join('');
+      </tr>`;}).join('');
     }
   }
 }

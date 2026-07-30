@@ -340,8 +340,8 @@ tr:last-child td{border-bottom:none}
           <div class="fl"><label>Insurance Pays (RWF)</label><input type="number" id="rv-ipays" placeholder="0" min="0"></div>
         </div>
         <div class="fg c3">
-          <div class="fl"><label>Total Consultation (RWF)</label><input type="number" id="rv-total" placeholder="0" min="0"></div>
-          <div class="fl"><label>Patient Co-pay (RWF)</label><input type="number" id="rv-ppays" placeholder="0" min="0"></div>
+          <div class="fl"><label>Total Billed (RWF)</label><input type="number" id="rv-total" placeholder="0" min="0"></div>
+          <div class="fl"><label>Patient Paid at Desk (RWF)</label><input type="number" id="rv-ppays" placeholder="0" min="0"></div>
           <div class="fl"><label>No. of Patients</label><input type="number" id="rv-pts" placeholder="1" min="1"></div>
         </div>
         <div class="fg c2">
@@ -375,7 +375,7 @@ tr:last-child td{border-bottom:none}
       <div class="fl"><label>Insurance / Type</label><input type="text" id="er-ins"></div>
     </div>
     <div class="fg c3" style="margin-top:10px">
-      <div class="fl"><label>Total Consultation (RWF)</label><input type="number" id="er-total" min="0"></div>
+      <div class="fl"><label>Total Billed (RWF)</label><input type="number" id="er-total" min="0"></div>
       <div class="fl"><label>Insurance Pays (RWF)</label><input type="number" id="er-ins-amt" min="0"></div>
       <div class="fl"><label>Patient Co-pay (RWF)</label><input type="number" id="er-pat" min="0"></div>
     </div>
@@ -1171,6 +1171,8 @@ async function saveRev(){
   const type=document.getElementById('rv-type').value;
   const ins=type==='private'?0:(parseFloat(document.getElementById('rv-ipays').value)||0);
   const pat=parseFloat(document.getElementById('rv-ppays').value)||0;
+  const patBilled=type==='private'?0:Math.max(0,total-ins);
+  const writtenOff=type==='private'?0:Math.max(0,patBilled-pat);
   await db.collection('revenues').add({
     date,type,
     insurance:type==='private'?'PRIVATE':document.getElementById('rv-ins').value,
@@ -1184,7 +1186,7 @@ async function saveRev(){
 function clearRev(){
   document.getElementById('rv-date').value=today();
   document.getElementById('rv-type').value='insurance';
-  ['rv-total','rv-ipays','rv-ppays','rv-pts','rv-notes','rv-pbilled','rv-pdebt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['rv-total','rv-ipays','rv-ppays','rv-pts','rv-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   toggleRevType();
 }
 

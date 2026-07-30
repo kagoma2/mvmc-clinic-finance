@@ -867,7 +867,7 @@ const can=(feature)=>{
 
 let db,auth,app;
 let U={user:null,role:null,name:null};
-let D={revs:[],exps:[],facs:[],bankTx:[],users:[],settings:{insurances:[],categories:[],openingBalance:0,openingDate:''}};
+let D={revs:[],exps:[],facs:[],bankTx:[],privs:[],users:[],settings:{insurances:[],categories:[],openingBalance:0,openingDate:''}};
 let unsubs=[];
 let facEditId=null,payFacId=null;
 let fFrom=null,fTo=null;
@@ -1381,25 +1381,44 @@ function renderDash(){
   const now=new Date();
   const mRevs=D.revs.filter(r=>{const d=new Date(r.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
   const mExps=D.exps.filter(e=>{const d=new Date(e.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
-  const tR=mRevs.reduce((s,r)=>s+r.total,0);
-  const tI=mRevs.reduce((s,r)=>s+r.ins,0);
-  const tP=mRevs.reduce((s,r)=>s+r.pat,0);
-  const tE=mExps.reduce((s,e)=>s+e.amount,0);
+  const bankBal=calcBankBalance();
+  const mn=now.toLocaleDateString('en',{month:'long',year:'numeric'});
+
+  // Revenue calculations
+  // Insurance entries (exclude private type from revenues collection)
+  const insRevs=mRevs.filter(r=>r.type!=='private');
+  const tI=insRevs.reduce((s,r)=>s+(r.ins||0),0);
+  const tP=insRevs.reduce((s,r)=>s+(r.pat||0),0);
+  const tInsTotal=insRevs.reduce((s,r)=>s+(r.total||0),0);
+  // Old private entries still in revenues collection
+  const oldPrivRevs=mRevs.filter(r=>r.type==='private');
+  const tOldPriv=oldPrivRevs.reduce((s,r)=>s+(r.total||0),0);
+  // New private entries from dedicated private collection
+  const mPrivs=(D.privs||[]).filter(r=>{const d=new Date(r.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
+  const tNewPriv=mPrivs.reduce((s,r)=>s+(r.total||0),0);
+  const tPrivCollected=mPrivs.reduce((s,r)=>s+(r.collected||0),0);
+  const tPriv=tOldPriv+tNewPriv;
+  const tR=tInsTotal+tPriv;
+  const tUnalloc=tInsTotal-(tI+tP);
+  const tE=mExps.reduce((s,e)=>s+(e.amount||0),0);
   const bal=tR-tE;
   const outstanding=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').reduce((s,f)=>{
     const pmts=f.payments||[];
-    const rec=pmts.reduce((a,p)=>a+(p.amount||0),0)||f.totalReceived||0;
-    const ded=Math.max(0,pmts.reduce((a,p)=>a+Math.max(0,p.deducted||0),0)||f.totalDeducted||0);
-    return s+(f.totalClaimed||0)-rec-ded;
+    const rec=pmts.reduce((a,p)=>a+Number(p.amount||0),0)||f.totalReceived||0;
+    const ded=Math.max(0,pmts.reduce((a,p)=>a+Math.max(0,Number(p.deducted||0)),0)||f.totalDeducted||0);
+    return s+Math.max(0,(f.totalClaimed||0)-rec-ded);
   },0);
-  const bankBal=calcBankBalance();
-  const mn=now.toLocaleDateString('en',{month:'long',year:'numeric'});
+  const tTechDeduct=D.facs.reduce((s,f)=>{
+    const pmts=f.payments||[];
+    return s+pmts.reduce((a,p)=>a+Math.max(0,Number(p.deducted||0)),0);
+  },0);
+  const tWithholding=D.facs.reduce((s,f)=>s+Math.max(0,f.totalWithholding||0),0);
 
   document.getElementById('dash-kpis').innerHTML=`
     <div class="kpi gr"><div class="kpi-label">Total Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} · ${insRevs.length+mPrivs.length} entries</div></div>
     <div class="kpi bl"><div class="kpi-label">Insurance Revenue</div><div class="kpi-val blu">RWF ${fmt(tInsTotal)}</div><div class="kpi-sub">${mn} · ${insRevs.length} entries</div></div>
     <div class="kpi gd"><div class="kpi-label">Patient Co-pay</div><div class="kpi-val gld">RWF ${fmt(tP)}</div><div class="kpi-sub">${mn}</div></div>
-    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Revenue</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">Collected: RWF ${fmt(tPrivCollected)} · ${mPrivs.length} entries</div></div>
+    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Revenue</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">Collected: RWF ${fmt(tPrivCollected)} · ${mPrivs.length+oldPrivRevs.length} entries</div></div>
     ${tUnalloc>0?`<div class="kpi" style="background:#fff3cd;border:1px solid #ffc107"><div class="kpi-label" style="color:#856404">⚠ Unallocated</div><div class="kpi-val" style="color:#856404">RWF ${fmt(tUnalloc)}</div><div class="kpi-sub" style="color:#856404">Entries missing ins/pat split</div></div>`:''}
     <div class="kpi" style="background:#fff8e1"><div class="kpi-label" style="color:#e65100">Outstanding Receivables</div><div class="kpi-val" style="color:#e65100">RWF ${fmt(outstanding)}</div><div class="kpi-sub" style="color:#e65100">${D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').length} unpaid factures</div></div>
     <div class="kpi rd"><div class="kpi-label">Technical Deductions</div><div class="kpi-val neg">RWF ${fmt(tTechDeduct)}</div><div class="kpi-sub">Wrong forms · All time</div></div>

@@ -318,7 +318,7 @@ tr:last-child td{border-bottom:none}
       </div>
       <div class="sec" style="margin-top:16px">
         <div class="sec-title">Outstanding Receivables by Insurance</div>
-        <div class="tw"><table><thead><tr><th>Insurance</th><th>Billed (RWF)</th><th>Received (RWF)</th><th>Outstanding (RWF)</th><th>Status</th></tr></thead><tbody id="dash-recv"></tbody></table></div>
+        <div class="tw"><table><thead><tr><th>Insurance</th><th>Period</th><th>Billed</th><th>Tech. Deducted</th><th>Withholding</th><th>Received</th><th>Outstanding</th><th>Status</th></tr></thead><tbody id="dash-recv"></tbody></table></div>
       </div>
       <div class="sec" style="margin-top:16px">
         <div class="sec-title">Recent Activity</div>
@@ -390,6 +390,41 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+    <!-- PRIVATE PATIENTS -->
+    <div id="p-private" class="panel">
+      <div class="sec">
+        <div class="sec-title">New Private Patient Entry</div>
+        <div id="priv-ok" class="alert alert-ok"></div>
+        <div class="fg c2">
+          <div class="fl"><label>Date</label><input type="date" id="pv-date"></div>
+          <div class="fl"><label>No. of Patients</label><input type="number" id="pv-pts" placeholder="1" min="1" value="1"></div>
+        </div>
+        <div class="fg c2">
+          <div class="fl"><label>Total Charged (RWF)</label><input type="number" id="pv-total" placeholder="0" min="0"></div>
+          <div class="fl"><label>Cash Collected (RWF)</label><input type="number" id="pv-collected" placeholder="0" min="0"></div>
+        </div>
+        <div class="fg">
+          <div class="fl"><label>Notes</label><textarea id="pv-notes" placeholder="Optional notes..."></textarea></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-p" onclick="savePrivate()">Save Private Entry</button>
+          <button class="btn btn-s" onclick="clearPrivate()">Clear</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Private Revenue Summary</div>
+        <div class="fbar" style="margin-bottom:12px;display:flex;gap:12px;align-items:flex-end">
+          <div class="fl"><label>Select Date</label><input type="date" id="pv-view-date" onchange="renderPrivateSummary()"></div>
+          <button class="btn btn-s sm" onclick="setPvToday()">Today</button>
+        </div>
+        <div class="tw"><table><thead><tr><th>Date</th><th>Patients</th><th>Total Charged (RWF)</th><th>Cash Collected (RWF)</th><th>Difference (RWF)</th></tr></thead><tbody id="pv-summary"></tbody></table></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">All Private Entries</div>
+        <div class="tw"><table><thead><tr><th>Date</th><th>Patients</th><th>Charged (RWF)</th><th>Collected (RWF)</th><th>Notes</th><th></th></tr></thead><tbody id="pv-list"></tbody></table></div>
+      </div>
+    </div>
+
     <!-- FACTURES -->
     <div id="p-factures" class="panel">
       <div class="sec">
@@ -401,7 +436,7 @@ tr:last-child td{border-bottom:none}
         </div>
         <div class="tw">
           <table>
-            <thead><tr><th>Insurance</th><th>Period</th><th>Billed (RWF)</th><th>Received (RWF)</th><th>Deducted (RWF)</th><th>Outstanding (RWF)</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Insurance</th><th>Period</th><th>Billed</th><th>Tech. Deduction</th><th>Agreed</th><th>Withholding</th><th>Received</th><th>Outstanding</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody id="fac-tbody"></tbody>
           </table>
         </div>
@@ -676,7 +711,8 @@ tr:last-child td{border-bottom:none}
           <tr>
             <th>Date</th>
             <th>Amount Received</th>
-            <th>Deducted</th>
+            <th>Technical Deduction</th>
+            <th>Withholding Tax</th>
             <th>Reason</th>
             <th>Reference</th>
             <th>Action</th>
@@ -1011,6 +1047,7 @@ function setupListeners(){
     unsubs.push(u);
   };
   listen('revenues','revs',()=>{renderDash();renderRevSummary();renderReports();});
+  listen('private','privs',()=>{renderDash();renderPrivateSummary();renderPrivateList();});
   listen('expenses','exps',()=>{renderDash();renderExpSummary();renderReports();});
   listen('factures','facs',()=>{renderDash();renderFacs();renderReports();});
   listen('bankTx','bankTx',()=>{renderBankFiltered();renderBankBalance();renderDash();});
@@ -1094,6 +1131,11 @@ function switchPanel(name){
     renderRevSummary();
   }
   if(name==='expenses') populateDDs();
+  if(name==='private'){
+    const pvd=document.getElementById('pv-date');if(pvd&&!pvd.value) pvd.value=today();
+    const pvvd=document.getElementById('pv-view-date');if(pvvd&&!pvvd.value) pvvd.value=today();
+    renderPrivateSummary();
+  }
   if(name==='factures'){populateDDs();renderFacs();}
   if(name==='consultations') renderConsult();
   if(name==='bank'){
@@ -1233,6 +1275,25 @@ async function saveFac(){
 }
 
 // PAYMENT RECORDING
+function calcWithholding(){
+  const f=D.facs.find(x=>x.id===payFacId);
+  if(!f) return;
+  const received=parseFloat(document.getElementById('py-amount').value)||0;
+  const techDeduct=parseFloat(document.getElementById('py-deduct').value)||0;
+  const whRate=(parseFloat(document.getElementById('py-wh-rate').value)||3)/100;
+  const agreedAmount=(f.totalClaimed||0)-techDeduct;
+  const whAmount=Math.round(agreedAmount*whRate);
+  const netAmount=agreedAmount-whAmount;
+  const wh=document.getElementById('py-wh-amount');
+  const net=document.getElementById('py-net');
+  if(wh) wh.value=whAmount;
+  if(net) net.value=netAmount;
+  // Also update the amount field to suggest the net
+  if(!received){
+    const amt=document.getElementById('py-amount');
+    if(amt) amt.placeholder=netAmount>0?netAmount:0;
+  }
+}
 function calcDeducted(){
   const f=D.facs.find(x=>x.id===payFacId);
   if(!f) return;
@@ -1266,13 +1327,15 @@ async function savePay(settle){
   const f=D.facs.find(x=>x.id===payFacId);
   const reason=document.getElementById('py-reason').value.trim();
   const newRec=(f.totalReceived||0)+amount;
-  // Use manually entered deduct value (auto-filled but editable)
-  const manualDeduct=parseFloat(document.getElementById('py-deduct').value)||0;
+  const manualDeduct=Math.max(0,parseFloat(document.getElementById('py-deduct').value)||0);
+  const whRate=(parseFloat(document.getElementById('py-wh-rate').value)||3);
+  const whAmount=Math.max(0,parseFloat(document.getElementById('py-wh-amount').value)||0);
   const newDeduct=Math.max(0,manualDeduct);
-  const payment={date:document.getElementById('py-date').value,amount,deducted:manualDeduct,deductReason:reason,ref:document.getElementById('py-ref').value.trim(),notes:document.getElementById('py-notes').value.trim(),by:U.user.uid};
+  const payment={date:document.getElementById('py-date').value,amount,deducted:manualDeduct,deductReason:reason,withholdingRate:whRate,withholdingAmount:whAmount,ref:document.getElementById('py-ref').value.trim(),notes:document.getElementById('py-notes').value.trim(),by:U.user.uid};
   const newStatus=settle?'settled':document.getElementById('py-status').value;
   const batch=db.batch();
-  batch.update(db.collection('factures').doc(payFacId),{payments:firebase.firestore.FieldValue.arrayUnion(payment),totalReceived:newRec,totalDeducted:newDeduct,status:newStatus});
+  const newWH=(f.totalWithholding||0)+whAmount;
+  batch.update(db.collection('factures').doc(payFacId),{payments:firebase.firestore.FieldValue.arrayUnion(payment),totalReceived:newRec,totalDeducted:newDeduct,totalWithholding:newWH,status:newStatus});
   const txRef=db.collection('bankTx').doc();
   batch.set(txRef,{date:payment.date,type:'credit',amount,description:`Insurance payment: ${f.insurance} (${fmtD(f.periodFrom)}–${fmtD(f.periodTo)})`,category:'insurance_payment',ref:payFacId,uid:U.user.uid,ts:firebase.firestore.FieldValue.serverTimestamp()});
   await batch.commit();
@@ -1333,25 +1396,46 @@ function renderDash(){
   const mn=now.toLocaleDateString('en',{month:'long',year:'numeric'});
 
   document.getElementById('dash-kpis').innerHTML=`
-    <div class="kpi gr"><div class="kpi-label">Total Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} · ${mRevs.length} entries</div></div>
-    <div class="kpi bl"><div class="kpi-label">Insurance Portion</div><div class="kpi-val blu">RWF ${fmt(tI)}</div><div class="kpi-sub">${mn}</div></div>
+    <div class="kpi gr"><div class="kpi-label">Total Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} · ${insRevs.length+mPrivs.length} entries</div></div>
+    <div class="kpi bl"><div class="kpi-label">Insurance Revenue</div><div class="kpi-val blu">RWF ${fmt(tInsTotal)}</div><div class="kpi-sub">${mn} · ${insRevs.length} entries</div></div>
     <div class="kpi gd"><div class="kpi-label">Patient Co-pay</div><div class="kpi-val gld">RWF ${fmt(tP)}</div><div class="kpi-sub">${mn}</div></div>
+    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Revenue</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">Collected: RWF ${fmt(tPrivCollected)} · ${mPrivs.length} entries</div></div>
+    ${tUnalloc>0?`<div class="kpi" style="background:#fff3cd;border:1px solid #ffc107"><div class="kpi-label" style="color:#856404">⚠ Unallocated</div><div class="kpi-val" style="color:#856404">RWF ${fmt(tUnalloc)}</div><div class="kpi-sub" style="color:#856404">Entries missing ins/pat split</div></div>`:''}
+    <div class="kpi" style="background:#fff8e1"><div class="kpi-label" style="color:#e65100">Outstanding Receivables</div><div class="kpi-val" style="color:#e65100">RWF ${fmt(outstanding)}</div><div class="kpi-sub" style="color:#e65100">${D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').length} unpaid factures</div></div>
+    <div class="kpi rd"><div class="kpi-label">Technical Deductions</div><div class="kpi-val neg">RWF ${fmt(tTechDeduct)}</div><div class="kpi-sub">Wrong forms · All time</div></div>
+    <div class="kpi rd"><div class="kpi-label">Withholding Tax</div><div class="kpi-val neg">RWF ${fmt(tWithholding)}</div><div class="kpi-sub">3% insurance tax · All time</div></div>
     <div class="kpi rd"><div class="kpi-label">Total Expenses</div><div class="kpi-val neg">RWF ${fmt(tE)}</div><div class="kpi-sub">${mn}</div></div>
     <div class="kpi ${bal>=0?'gr':'rd'}"><div class="kpi-label">Net Balance</div><div class="kpi-val ${bal>=0?'pos':'neg'}">RWF ${fmt(bal)}</div><div class="kpi-sub">${mn}</div></div>
     <div class="kpi or"><div class="kpi-label">Outstanding Receivables</div><div class="kpi-val" style="color:var(--warn)">RWF ${fmt(outstanding)}</div><div class="kpi-sub">From insurance factures</div></div>
     <div class="kpi pu"><div class="kpi-label">Bank Balance</div><div class="kpi-val pur">RWF ${fmt(bankBal)}</div><div class="kpi-sub">Current account balance</div></div>
   `;
 
-  // Outstanding receivables table
-  const insOut={};
-  D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').forEach(f=>{
-    if(!insOut[f.insurance]) insOut[f.insurance]={billed:0,received:0};
-    insOut[f.insurance].billed+=f.totalClaimed||0;
-    insOut[f.insurance].received+=f.totalReceived||0;
-  });
+  // Outstanding receivables table - show each unpaid facture with full breakdown
+  const unpaidFacs=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled');
   const rtb=document.getElementById('dash-recv');
-  const rks=Object.keys(insOut);
-  rtb.innerHTML=rks.length?rks.map(k=>`<tr><td><span class="itag">${k}</span></td><td>${fmt(insOut[k].billed)}</td><td>${fmt(insOut[k].received)}</td><td style="font-weight:700;color:var(--warn)">${fmt(insOut[k].billed-insOut[k].received)}</td><td><span class="s-submitted">Pending</span></td></tr>`).join(''):`<tr><td colspan="5" class="empty">No outstanding receivables.</td></tr>`;
+  if(!unpaidFacs.length){
+    rtb.innerHTML='<tr><td colspan="8" class="empty">No outstanding receivables.</td></tr>';
+  } else {
+    rtb.innerHTML=unpaidFacs.map(f=>{
+      const pmts=f.payments||[];
+      const rec=pmts.reduce((s,p)=>s+Number(p.amount||0),0)||f.totalReceived||0;
+      const techDeduct=pmts.reduce((s,p)=>s+Math.max(0,Number(p.deducted||0)),0)||f.totalDeducted||0;
+      const wh=f.totalWithholding||0;
+      const agreed=(f.totalClaimed||0)-techDeduct;
+      const out=Math.max(0,(f.totalClaimed||0)-rec-techDeduct);
+      const sc=f.status==='submitted'?'s-submitted':f.status==='partial'?'s-partial':f.status==='disputed'?'s-disputed':'s-draft';
+      return `<tr>
+        <td><span class="itag">${f.insurance}</span></td>
+        <td style="font-size:11px">${fmtD(f.periodFrom)}–${fmtD(f.periodTo)}</td>
+        <td style="font-weight:700">${fmt(f.totalClaimed||0)}</td>
+        <td style="color:var(--err)">${techDeduct>0?fmt(techDeduct):'—'}</td>
+        <td style="color:var(--err)">${wh>0?fmt(wh):'—'}</td>
+        <td style="color:var(--ok)">${rec>0?fmt(rec):'—'}</td>
+        <td style="font-weight:700;color:var(--warn)">${fmt(out)}</td>
+        <td><span class="${sc}">${f.status}</span></td>
+      </tr>`;
+    }).join('');
+  }
 
   // Recent activity
   const all=[
@@ -1493,8 +1577,10 @@ function renderFacs(){
       <td><span class="itag">${f.insurance}</span></td>
       <td>${fmtD(f.periodFrom)} – ${fmtD(f.periodTo)}</td>
       <td style="font-weight:700">${fmt(f.totalClaimed)}</td>
+      <td style="color:var(--err)">${dispDeducted>0?fmt(dispDeducted):'—'}</td>
+      <td style="font-weight:700">${fmt((f.totalClaimed||0)-dispDeducted)}</td>
+      <td style="color:var(--err)">${fmt(f.totalWithholding||0)}</td>
       <td style="color:var(--ok);font-weight:700">${fmt(dispReceived)}</td>
-      <td style="color:var(--err);font-weight:700">${fmt(dispDeducted)}</td>
       <td style="font-weight:700;color:${out>0?'var(--warn)':'var(--ok)'}">${fmt(out)}</td>
       <td><span class="${sc}">${f.status}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
@@ -1832,6 +1918,8 @@ window.addEventListener('load',()=>{
   document.getElementById('rv-date').value=today();
   document.getElementById('ex-date').value=today();
   const rvd=document.getElementById('rv-view-date');if(rvd) rvd.value=today();
+  const pvd=document.getElementById('pv-date');if(pvd) pvd.value=today();
+  const pvvd=document.getElementById('pv-view-date');if(pvvd) pvvd.value=today();
   const evd=document.getElementById('ex-view-date');if(evd) evd.value=today();
   cvFrom=new Date(new Date().getFullYear(),new Date().getMonth(),1).toISOString().slice(0,10);
   cvTo=new Date(new Date().getFullYear(),new Date().getMonth()+1,0).toISOString().slice(0,10);
@@ -1874,6 +1962,7 @@ function viewPayments(facId){
       <td>${fmtD(p.date)}</td>
       <td style="color:var(--ok);font-weight:700">RWF ${fmt(p.amount||0)}</td>
       <td style="color:var(--err)">${p.deducted?'RWF '+fmt(p.deducted):'—'}</td>
+      <td style="color:var(--err)">${p.withholdingAmount?'RWF '+fmt(p.withholdingAmount)+' ('+p.withholdingRate+'%)':'—'}</td>
       <td>${p.deductReason||'—'}</td>
       <td>${p.ref||'—'}</td>
       <td><button class="btn btn-s sm" onclick="openEditPayModal('${facId}',${i});document.getElementById('modal-pay-history').classList.remove('on')">Edit</button></td>

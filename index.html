@@ -362,7 +362,7 @@ tr:last-child td{border-bottom:none}
       </div>
       <div class="sec">
         <div class="sec-title">All Revenue Entries</div>
-        <div class="tw"><table><thead><tr><th>Date</th><th>Insurance / Type</th><th>Patients</th><th>Total (RWF)</th><th>Ins. Paid (RWF)</th><th>Co-pay (RWF)</th><th>Notes</th><th></th></tr></thead><tbody id="rev-list"></tbody></table></div>
+        <div class="tw"><table><thead><tr><th>Date</th><th>Insurance / Type</th><th>Patients</th><th>Total Billed</th><th>Insurance Pays</th><th>Patient Paid</th><th>Written Off</th><th>Notes</th><th></th></tr></thead><tbody id="rev-list"></tbody></table></div>
       </div>
     </div>
 
@@ -1174,7 +1174,7 @@ async function saveRev(){
   await db.collection('revenues').add({
     date,type,
     insurance:type==='private'?'PRIVATE':document.getElementById('rv-ins').value,
-    total,ins,pat,
+    total,ins,pat,patBilled,writtenOff,
     patients:parseInt(document.getElementById('rv-pts').value)||1,
     notes:document.getElementById('rv-notes').value.trim(),
     by:U.user.uid,byName:U.name,createdAt:Date.now(),ts:firebase.firestore.FieldValue.serverTimestamp()
@@ -1184,7 +1184,7 @@ async function saveRev(){
 function clearRev(){
   document.getElementById('rv-date').value=today();
   document.getElementById('rv-type').value='insurance';
-  ['rv-total','rv-ipays','rv-ppays','rv-pts','rv-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['rv-total','rv-ipays','rv-ppays','rv-pts','rv-notes','rv-pbilled','rv-pdebt'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   toggleRevType();
 }
 
@@ -1390,20 +1390,24 @@ function renderDash(){
   const insRevs=mRevs.filter(r=>r.type!=='private');
   const tI=insRevs.reduce((s,r)=>s+(r.ins||0),0);
   const tP=insRevs.reduce((s,r)=>s+(r.pat||0),0);
-  const tInsTotal=insRevs.reduce((s,r)=>s+(r.total||0),0);
+  const tInsBilled=insRevs.reduce((s,r)=>s+(r.total||0),0);
+  // Patient debt = total billed - insurance pays - patient paid (patients who couldn't pay)
+  const tWrittenOff=insRevs.reduce((s,r)=>{
+    const debt=r.writtenOff!==undefined?r.writtenOff:Math.max(0,(r.total||0)-(r.ins||0)-(r.pat||0));
+    return s+debt;
+  },0);
   // Old private entries still in revenues collection
   const oldPrivRevs=mRevs.filter(r=>r.type==='private');
-  const tOldPriv=oldPrivRevs.reduce((s,r)=>s+(r.total||0),0);
+  const tOldPriv=oldPrivRevs.reduce((s,r)=>s+(r.pat||r.total||0),0);
   // New private entries from dedicated private collection
   const mPrivs=(D.privs||[]).filter(r=>{const d=new Date(r.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
-  const tNewPriv=mPrivs.reduce((s,r)=>s+(r.total||0),0);
-  // For old private entries in revenues, collected = pat (patient pays everything)
-  const tOldPrivCollected=oldPrivRevs.reduce((s,r)=>s+(r.pat||r.total||0),0);
-  const tPrivCollected=tOldPrivCollected+mPrivs.reduce((s,r)=>s+(r.collected||0),0);
-  const tPriv=tOldPriv+tNewPriv;
-  const tR=tInsTotal+tPriv;
-  // Unallocated = insurance entries where ins+pat was not filled in
-  const tUnalloc=Math.max(0,tInsTotal-(tI+tP));
+  const tNewPriv=mPrivs.reduce((s,r)=>s+(r.collected||r.total||0),0);
+  const tPrivCollected=tOldPriv+tNewPriv;
+  const tPriv=tPrivCollected;
+  // ACTUAL Revenue = Insurance pays + Patient actually paid + Private collected
+  const tInsTotal=tI; // what insurance actually pays
+  const tR=tI+tP+tPriv;
+  const tUnalloc=0; // no longer unallocated - it's written off
   const tE=mExps.reduce((s,e)=>s+(e.amount||0),0);
   const bal=tR-tE;
   const outstanding=D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').reduce((s,f)=>{
@@ -1419,18 +1423,18 @@ function renderDash(){
   const tWithholding=D.facs.reduce((s,f)=>s+Math.max(0,f.totalWithholding||0),0);
 
   document.getElementById('dash-kpis').innerHTML=`
-    <div class="kpi gr"><div class="kpi-label">Total Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} · ${insRevs.length+oldPrivRevs.length+mPrivs.length} entries</div></div>
-    <div class="kpi bl"><div class="kpi-label">Insurance Billed</div><div class="kpi-val blu">RWF ${fmt(tInsTotal)}</div><div class="kpi-sub">${mn} · ${insRevs.length} entries</div></div>
-    <div class="kpi bl"><div class="kpi-label">Insurance Pays</div><div class="kpi-val blu">RWF ${fmt(tI)}</div><div class="kpi-sub">${mn}</div></div>
-    <div class="kpi gd"><div class="kpi-label">Patient Co-pay</div><div class="kpi-val gld">RWF ${fmt(tP)}</div><div class="kpi-sub">${mn}</div></div>
-    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Revenue</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">Collected: RWF ${fmt(tPrivCollected)} · ${oldPrivRevs.length+mPrivs.length} entries</div></div>
+    <div class="kpi gr"><div class="kpi-label">Actual Revenue</div><div class="kpi-val pos">RWF ${fmt(tR)}</div><div class="kpi-sub">${mn} — ins + copay + private</div></div>
+    <div class="kpi bl"><div class="kpi-label">Insurance Pays</div><div class="kpi-val blu">RWF ${fmt(tI)}</div><div class="kpi-sub">${mn} · ${insRevs.length} entries</div></div>
+    <div class="kpi gd"><div class="kpi-label">Patient Co-pay Collected</div><div class="kpi-val gld">RWF ${fmt(tP)}</div><div class="kpi-sub">${mn} — actually paid at desk</div></div>
+    <div class="kpi" style="background:#e8f5e9"><div class="kpi-label" style="color:#1b5e20">Private Collected</div><div class="kpi-val" style="color:#1b5e20">RWF ${fmt(tPriv)}</div><div class="kpi-sub" style="color:#388e3c">${oldPrivRevs.length+mPrivs.length} entries</div></div>
+    <div class="kpi" style="background:#ffebee"><div class="kpi-label" style="color:#b71c1c">Written Off</div><div class="kpi-val" style="color:#b71c1c">RWF ${fmt(tWrittenOff)}</div><div class="kpi-sub" style="color:#c62828">Co-pay patient could not pay · ${mn}</div></div>
     <div class="kpi rd"><div class="kpi-label">Total Expenses</div><div class="kpi-val neg">RWF ${fmt(tE)}</div><div class="kpi-sub">${mn}</div></div>
     <div class="kpi ${bal>=0?'gr':'rd'}"><div class="kpi-label">Net Balance</div><div class="kpi-val ${bal>=0?'pos':'neg'}">RWF ${fmt(bal)}</div><div class="kpi-sub">${mn}</div></div>
     <div class="kpi" style="background:#fff8e1"><div class="kpi-label" style="color:#e65100">Outstanding</div><div class="kpi-val" style="color:#e65100">RWF ${fmt(outstanding)}</div><div class="kpi-sub" style="color:#e65100">${D.facs.filter(f=>f.status!=='paid'&&f.status!=='settled').length} unpaid factures</div></div>
     <div class="kpi pu"><div class="kpi-label">Bank Balance</div><div class="kpi-val pur">RWF ${fmt(bankBal)}</div><div class="kpi-sub">Current balance</div></div>
     ${tTechDeduct>0?`<div class="kpi rd"><div class="kpi-label">Tech. Deductions</div><div class="kpi-val neg">RWF ${fmt(tTechDeduct)}</div><div class="kpi-sub">Wrong forms · All time</div></div>`:''}
     ${tWithholding>0?`<div class="kpi rd"><div class="kpi-label">Withholding Tax</div><div class="kpi-val neg">RWF ${fmt(tWithholding)}</div><div class="kpi-sub">3% tax · All time</div></div>`:''}
-    ${tUnalloc>0?`<div class="kpi" style="background:#fff3cd;border:2px solid #ffc107"><div class="kpi-label" style="color:#856404">⚠ Fix Required</div><div class="kpi-val" style="color:#856404">RWF ${fmt(tUnalloc)}</div><div class="kpi-sub" style="color:#856404">Revenue entries missing ins/pat — check Revenue tab for ⚠</div></div>`:''}
+
   `
 
   // Outstanding receivables table - show each unpaid facture with full breakdown

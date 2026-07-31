@@ -663,6 +663,12 @@ tr:last-child td{border-bottom:none}
         <p style="font-size:13px;color:var(--t2);margin-bottom:16px">Control exactly what each role can see and do. Changes take effect immediately for all users.</p>
         <div id="perm-matrix" style="overflow-x:auto"></div>
       </div>
+      <div class="sec" id="migrate-sec">
+        <div class="sec-title">Migrate Old Payment Data <span style="font-size:11px;background:#b8860b;color:white;padding:2px 8px;border-radius:20px;margin-left:6px">MD ONLY</span></div>
+        <p style="font-size:13px;color:var(--t2);margin-bottom:12px">For MMI and RAMA factures, move existing deductions to Withholding Tax (3%). Other insurances keep their deductions as Technical Deductions. Run this once to fix old entries.</p>
+        <div id="migrate-ok" class="alert alert-ok"></div>
+        <button class="btn btn-p" onclick="migrateWithholding()">🔄 Migrate MMI & RAMA Deductions → Withholding Tax</button>
+      </div>
       <div class="sec">
         <div class="sec-title">Data Export</div>
         <div class="btn-row">
@@ -760,27 +766,39 @@ tr:last-child td{border-bottom:none}
     <div id="pay-fac-info" style="font-size:13px;color:var(--t2);margin-bottom:14px;padding:10px;background:var(--s1);border-radius:6px"></div>
     <div class="fg c2">
       <div class="fl"><label>Payment Date</label><input type="date" id="py-date"></div>
-      <div class="fl"><label>Amount Received (RWF)</label><input type="number" id="py-amount" placeholder="0" min="0" ></div>
-    </div>
-    <div class="fg c2">
       <div class="fl"><label>Bank Reference / Receipt No.</label><input type="text" id="py-ref" placeholder="Optional"></div>
-      <div class="fl"><label>New Status After Payment</label><select id="py-status"><option value="partial">Partially Paid</option><option value="paid">Fully Paid</option></select></div>
+    </div>
+    <div style="margin-top:12px;padding:12px;background:var(--s1);border-radius:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Payment Breakdown</div>
+      <div class="fg c2">
+        <div class="fl"><label>Agreed Amount (RWF) <span style="font-size:10px;color:var(--p)">what insurance agreed to pay</span></label>
+          <input type="number" id="py-agreed" placeholder="0" min="0" oninput="calcPayBreakdown()"></div>
+        <div class="fl"><label>Technical Deduction (RWF) <span style="font-size:10px;color:#00838f">auto = Billed − Agreed</span></label>
+          <input type="number" id="py-deduct" placeholder="0" min="0" style="background:#f5f5f5" readonly></div>
+      </div>
+      <div class="fg c3" style="margin-top:8px" id="py-wh-row">
+        <div class="fl"><label>Withholding Tax %</label>
+          <input type="number" id="py-wh-rate" placeholder="3" min="0" max="100" value="3" oninput="calcPayBreakdown()"></div>
+        <div class="fl"><label>Withholding Amount (RWF) <span style="font-size:10px;color:#00838f">auto</span></label>
+          <input type="number" id="py-wh-amount" placeholder="0" style="background:#f5f5f5" readonly></div>
+        <div class="fl"><label>Actually Received (RWF) <span style="font-size:10px;color:var(--ok)">auto</span></label>
+          <input type="number" id="py-amount" placeholder="0" style="background:#e8f5e9;font-weight:700" readonly></div>
+      </div>
+      <div style="display:none" id="py-nowh-row">
+        <div class="fl"><label>Amount Received (RWF)</label>
+          <input type="number" id="py-amount-manual" placeholder="0" min="0" oninput="calcPayBreakdown()"></div>
+      </div>
+      <div class="fg" style="margin-top:8px">
+        <div class="fl"><label>Reason for Deduction (if any)</label>
+          <input type="text" id="py-reason" placeholder="e.g. Wrong claim form, coding error..."></div>
+      </div>
     </div>
     <div class="fg">
       <div class="fl"><label>Notes</label><textarea id="py-notes" placeholder="Optional"></textarea></div>
     </div>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--s2)">
-      <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40;margin-bottom:10px">
-        <strong>Record Payment Only</strong> — insurance may still pay the rest later.<br>
-        <strong>Settle &amp; Close</strong> — insurance will pay no more. Deduction auto-calculated but you can edit it below. Invoice removed from outstanding.
-      </div>
-      <div class="fg c2">
-        <div class="fl">
-          <label>Amount Deducted / Refused (RWF) <span style="font-size:10px;color:#00838f">— auto-filled, you can edit</span></label>
-          <input type="number" id="py-deduct" placeholder="0" min="0" value="0">
-        </div>
-        <div class="fl"><label>Reason for Deduction</label><input type="text" id="py-reason" placeholder="e.g. Wrong claim form, coding error..."></div>
-      </div>
+    <div style="background:#e0f2f1;border-radius:7px;padding:9px 12px;font-size:12px;color:#004d40;margin-top:10px">
+      <strong>Record Payment Only</strong> — insurance may still pay more later. &nbsp;|&nbsp;
+      <strong>Settle &amp; Close</strong> — insurance will pay no more. Removed from outstanding.
     </div>
     <div class="modal-actions">
       <button class="btn btn-s" onclick="closePayModal()">Cancel</button>
@@ -1277,35 +1295,31 @@ async function saveFac(){
 }
 
 // PAYMENT RECORDING
-function calcWithholding(){
+function calcPayBreakdown(){
   const f=D.facs.find(x=>x.id===payFacId);
   if(!f) return;
-  const received=parseFloat(document.getElementById('py-amount').value)||0;
-  const techDeduct=parseFloat(document.getElementById('py-deduct').value)||0;
-  const whRate=(parseFloat(document.getElementById('py-wh-rate').value)||3)/100;
-  const agreedAmount=(f.totalClaimed||0)-techDeduct;
-  const whAmount=Math.round(agreedAmount*whRate);
-  const netAmount=agreedAmount-whAmount;
-  const wh=document.getElementById('py-wh-amount');
-  const net=document.getElementById('py-net');
-  if(wh) wh.value=whAmount;
-  if(net) net.value=netAmount;
-  // Also update the amount field to suggest the net
-  if(!received){
-    const amt=document.getElementById('py-amount');
-    if(amt) amt.placeholder=netAmount>0?netAmount:0;
+  const billed=f.totalClaimed||0;
+  const alreadyReceived=f.totalReceived||0;
+  const usesWH=['MMI','RAMA'].includes((f.insurance||'').toUpperCase());
+  if(usesWH){
+    const agreed=parseFloat(document.getElementById('py-agreed').value)||0;
+    const techDeduct=Math.max(0,billed-alreadyReceived-agreed);
+    const whRate=(parseFloat(document.getElementById('py-wh-rate').value)||3)/100;
+    const whAmount=Math.round(agreed*whRate);
+    const received=Math.max(0,agreed-whAmount);
+    const d=document.getElementById('py-deduct');if(d)d.value=techDeduct>0?techDeduct:0;
+    const w=document.getElementById('py-wh-amount');if(w)w.value=whAmount;
+    const a=document.getElementById('py-amount');if(a)a.value=received;
+  } else {
+    const agreed=parseFloat(document.getElementById('py-agreed').value)||0;
+    const techDeduct=Math.max(0,billed-alreadyReceived-agreed);
+    const d=document.getElementById('py-deduct');if(d)d.value=techDeduct>0?techDeduct:0;
+    const a=document.getElementById('py-amount');if(a)a.value=agreed;
+    const w=document.getElementById('py-wh-amount');if(w)w.value=0;
   }
 }
-function calcDeducted(){
-  const f=D.facs.find(x=>x.id===payFacId);
-  if(!f) return;
-  const received=parseFloat(document.getElementById('py-amount').value)||0;
-  const alreadyReceived=f.totalReceived||0;
-  const totalReceived=alreadyReceived+received;
-  const deducted=Math.max(0,(f.totalClaimed||0)-totalReceived);
-  const df=document.getElementById('py-deduct');
-  if(df) df.value=deducted>0?deducted:0;
-}
+function calcDeducted(){calcPayBreakdown();}
+function calcWithholding(){calcPayBreakdown();}
 
 function openPayModal(facId){
   payFacId=facId;
@@ -1324,7 +1338,8 @@ function openPayModal(facId){
 function closePayModal(){document.getElementById('modal-pay').classList.remove('on');payFacId=null;}
 async function savePay(settle){
   if(!canWrite()){alert('No permission.');return;}
-  const amount=parseFloat(document.getElementById('py-amount').value)||0;
+  const agreedAmt=parseFloat(document.getElementById('py-agreed').value)||0;
+  const amount=parseFloat(document.getElementById('py-amount').value)||agreedAmt||0;
   if(!amount){alert('Enter payment amount.');return;}
   const f=D.facs.find(x=>x.id===payFacId);
   const reason=document.getElementById('py-reason').value.trim();
@@ -1765,6 +1780,32 @@ function renderUsers(){
   </tr>`).join(''):`<tr><td colspan="4" class="empty">No pending users.</td></tr>`;
 }
 
+async function migrateWithholding(){
+  if(!isMD()){alert('Only Managing Director can run this.');return;}
+  if(!confirm('This will move all deductions from MMI and RAMA factures into Withholding Tax. Other insurances are not affected. Continue?')) return;
+  const mmiRama=['MMI','RAMA'];
+  const toMigrate=D.facs.filter(f=>mmiRama.includes(f.insurance.toUpperCase())&&(f.totalDeducted||0)>0);
+  if(!toMigrate.length){showOk('migrate-ok','✓ No entries to migrate — already up to date!');return;}
+  let count=0;
+  const batch=db.batch();
+  for(const f of toMigrate){
+    const newPayments=(f.payments||[]).map(p=>{
+      if((p.deducted||0)>0){
+        return {...p,withholdingAmount:p.deducted,withholdingRate:3,deducted:0,deductReason:'Migrated to Withholding Tax'};
+      }
+      return p;
+    });
+    const totalWH=newPayments.reduce((s,p)=>s+(p.withholdingAmount||0),0);
+    batch.update(db.collection('factures').doc(f.id),{
+      payments:newPayments,
+      totalWithholding:totalWH,
+      totalDeducted:0
+    });
+    count++;
+  }
+  await batch.commit();
+  showOk('migrate-ok','✓ Migrated '+count+' factures (MMI & RAMA). Deductions moved to Withholding Tax.');
+}
 function isOwner(){return isMD();}
 
 // SETTINGS

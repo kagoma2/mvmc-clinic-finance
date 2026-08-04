@@ -1396,18 +1396,20 @@ function openSettingBalance(){
   document.getElementById('modal-balance').classList.add('on');
 }
 async function saveOpeningBalance(){
-  const amount=parseFloat(document.getElementById('ob-amount').value)||0;
-  const date=document.getElementById('ob-date').value;
-  const bank=document.getElementById('ob-bank')?document.getElementById('ob-bank').value:'IM';
-  const update={};
-  update['openingBalance_'+bank]=amount;
-  update['openingDate_'+bank]=date;
-  if(bank==='IM'){update.openingBalance=amount;update.openingDate=date;}
   try{
+    const amount=parseFloat(document.getElementById('ob-amount').value)||0;
+    const date=document.getElementById('ob-date').value||today();
+    const bankEl=document.getElementById('ob-bank');
+    const bank=bankEl?bankEl.value:'IM';
+    const update={openingBalance:amount,openingDate:date};
+    update['openingBalance_'+bank]=amount;
+    update['openingDate_'+bank]=date;
     await db.collection('settings').doc('main').set(update,{merge:true});
     document.getElementById('modal-balance').classList.remove('on');
-    showOk('bank-ok','✓ Opening balance set for '+bank+' Bank: RWF '+fmt(amount));
-  }catch(e){alert('Could not save: '+e.message);}
+    alert('Opening balance saved: RWF '+fmt(amount)+' for '+bank+' Bank');
+  }catch(e){
+    alert('Error saving: '+e.message);
+  }
 }
 
 // RENDER: DASHBOARD

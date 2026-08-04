@@ -1385,12 +1385,29 @@ async function saveBankTx(){
   })
   showOk('bank-ok','✓ Transaction saved!'); closeBankModal();
 }
-function openSettingBalance(){document.getElementById('ob-amount').value=D.settings.openingBalance||'';document.getElementById('ob-date').value=D.settings.openingDate||today();document.getElementById('modal-balance').classList.add('on');}
+function openSettingBalance(){
+  const bank=currentBank||'IM';
+  const ob=document.getElementById('ob-bank');
+  if(ob) ob.value=bank;
+  const bal=D.settings['openingBalance_'+bank]||D.settings.openingBalance||0;
+  const dt=D.settings['openingDate_'+bank]||D.settings.openingDate||today();
+  document.getElementById('ob-amount').value=bal||'';
+  document.getElementById('ob-date').value=dt;
+  document.getElementById('modal-balance').classList.add('on');
+}
 async function saveOpeningBalance(){
   const amount=parseFloat(document.getElementById('ob-amount').value)||0;
   const date=document.getElementById('ob-date').value;
-  await db.collection('settings').doc('main').set({openingBalance:amount,openingDate:date},{'merge':true});
-  document.getElementById('modal-balance').classList.remove('on');
+  const bank=document.getElementById('ob-bank')?document.getElementById('ob-bank').value:'IM';
+  const update={};
+  update['openingBalance_'+bank]=amount;
+  update['openingDate_'+bank]=date;
+  if(bank==='IM'){update.openingBalance=amount;update.openingDate=date;}
+  try{
+    await db.collection('settings').doc('main').set(update,{merge:true});
+    document.getElementById('modal-balance').classList.remove('on');
+    showOk('bank-ok','✓ Opening balance set for '+bank+' Bank: RWF '+fmt(amount));
+  }catch(e){alert('Could not save: '+e.message);}
 }
 
 // RENDER: DASHBOARD

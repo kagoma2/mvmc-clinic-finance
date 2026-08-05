@@ -1160,6 +1160,10 @@ function switchPanel(name){
     renderBank();renderBankFiltered();renderBankBalance();
     const rb=document.getElementById('btn-reset-bank');
     if(rb) rb.style.display=isMD()?'':'none';
+    const obd=document.getElementById('ob-date');
+    if(obd&&!obd.value) obd.value=today();
+    const obbk=document.getElementById('ob-bank');
+    if(obbk) obbk.value=currentBank||'IM';
   }
   if(name==='reports') renderReports();
   if(name==='users'){renderUsers();renderRoleGuide();}
@@ -1386,14 +1390,9 @@ async function saveBankTx(){
   showOk('bank-ok','✓ Transaction saved!'); closeBankModal();
 }
 function openSettingBalance(){
-  const bank=currentBank||'IM';
-  const ob=document.getElementById('ob-bank');
-  if(ob) ob.value=bank;
-  const bal=D.settings['openingBalance_'+bank]||D.settings.openingBalance||0;
-  const dt=D.settings['openingDate_'+bank]||D.settings.openingDate||today();
-  document.getElementById('ob-amount').value=bal||'';
-  document.getElementById('ob-date').value=dt;
-  document.getElementById('modal-balance').classList.add('on');
+  // Now inline - just scroll to it
+  const ob=document.getElementById('ob-inline');
+  if(ob) ob.scrollIntoView({behavior:'smooth'});
 }
 async function saveOpeningBalance(){
   try{
@@ -1401,14 +1400,22 @@ async function saveOpeningBalance(){
     const date=document.getElementById('ob-date').value||today();
     const bankEl=document.getElementById('ob-bank');
     const bank=bankEl?bankEl.value:'IM';
-    const update={openingBalance:amount,openingDate:date};
+    // Update Firebase
+    const update={};
     update['openingBalance_'+bank]=amount;
     update['openingDate_'+bank]=date;
+    if(bank==='IM'){update.openingBalance=amount;update.openingDate=date;}
     await db.collection('settings').doc('main').set(update,{merge:true});
-    document.getElementById('modal-balance').classList.remove('on');
-    alert('Opening balance saved: RWF '+fmt(amount)+' for '+bank+' Bank');
+    // Update local D.settings immediately
+    if(!D.settings) D.settings={};
+    D.settings['openingBalance_'+bank]=amount;
+    D.settings['openingDate_'+bank]=date;
+    if(bank==='IM') D.settings.openingBalance=amount;
+    showOk('bank-ok','✓ Opening balance set to RWF '+fmt(amount)+' for '+bank);
+    renderBankBalance();
   }catch(e){
-    alert('Error saving: '+e.message);
+    alert('Could not save opening balance: '+e.message);
+    console.error(e);
   }
 }
 
@@ -1418,7 +1425,7 @@ function renderDash(){
   const now=new Date();
   const mRevs=D.revs.filter(r=>{const d=new Date(r.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
   const mExps=D.exps.filter(e=>{const d=new Date(e.date);return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});
-  const bankBal=calcBankBalance();
+  const bankBal=calcBankBalance('IM');
   const mn=now.toLocaleDateString('en',{month:'long',year:'numeric'});
 
   // Revenue calculations
@@ -1656,10 +1663,12 @@ function renderFacs(){
 }
 
 // BANK BALANCE
-function calcBankBalance(){
-  const ob=D.settings.openingBalance||0;
-  const credits=D.bankTx.filter(t=>t.type==='credit').reduce((s,t)=>s+t.amount,0);
-  const debits=D.bankTx.filter(t=>t.type==='debit').reduce((s,t)=>s+t.amount,0);
+function calcBankBalance(bank){
+  bank=bank||currentBank||'IM';
+  const ob=D.settings['openingBalance_'+bank]||D.settings.openingBalance||0;
+  const txs=D.bankTx.filter(t=>(t.bank||'IM')===bank);
+  const credits=txs.filter(t=>t.type==='credit').reduce((s,t)=>s+(t.amount||0),0);
+  const debits=txs.filter(t=>t.type==='debit').reduce((s,t)=>s+(t.amount||0),0);
   return ob+credits-debits;
 }
 
@@ -2286,11 +2295,7 @@ function switchBank(bank){
   renderBankBalance();
 }
 function renderBankBalance(){
-  const txs=D.bankTx.filter(t=>(t.bank||'IM')===currentBank);
-  const ob=D.settings['openingBalance_'+currentBank]||D.settings.openingBalance||0;
-  const credits=txs.filter(t=>t.type==='credit').reduce((s,t)=>s+(t.amount||0),0);
-  const debits=txs.filter(t=>t.type==='debit').reduce((s,t)=>s+(t.amount||0),0);
-  const balance=ob+credits-debits;
+  const balance=calcBankBalance(currentBank);
   const el=document.getElementById('bk-balance-badge');
   if(el){el.textContent=fmt(balance)+' RWF';el.style.color=balance>=0?'var(--ok)':'var(--err)';}
 }
